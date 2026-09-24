@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Floki</title>
+<style>
+  /* Floki — calm dark security dashboard. System sans for UI chrome; monospace only
+     for commands, values and variable names. No network fonts (local-only tool). */
+  :root {
+    color-scheme: dark;
+    --bg: #0f1217;
+    --surface: #161a21;
+    --surface-2: #1b2029;
+    --surface-3: #212734;
+    --border: #262c37;
+    --border-2: #323a48;
+    --ink: #e8ebf1;
+    --muted: #a7b0c0;
+    --dim: #7e8899;
+    --accent: #46b8c6;
+    --accent-strong: #6fd2de;
+    --accent-tint: rgba(70,184,198,.13);
+    --accent-line: rgba(70,184,198,.45);
+    --accent-ink: #04252b;
+    --success: #55cda4;
+    --danger: #e5686f;
+
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+    --r1:6px; --r2:8px; --r3:12px;
+
+    --i-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4-4'/%3E%3C/svg%3E");
+    --i-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E");
+    --i-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5M11 6l-6 6 6 6'/%3E%3C/svg%3E");
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; color: var(--ink); background: var(--bg);
+    font-family: var(--sans); font-size: 0.875rem; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  /* themed browser surfaces */
+  ::selection { background: var(--accent-tint); color: var(--ink); }
+  input, textarea { caret-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d4759; background-clip: padding-box; }
+
+  /* --- app shell --- */
+  .app { display: flex; flex-direction: column; min-height: 100%; animation: appin .25s ease both; }
+  @keyframes appin { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+  .topbar {
+    display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
+    padding: var(--s3) var(--s5); border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .brand { display: flex; align-items: center; gap: var(--s3); margin: 0; font-size: 1rem; font-weight: 650; letter-spacing: -.01em; color: var(--ink); }
+  .brand .mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--accent-tint); color: var(--accent); flex: none; }
+  .brand .mark svg { width: 16px; height: 16px; }
+  .tagline { margin: 0; color: var(--muted); font-size: .8rem; flex: 1; min-width: 14ch; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .status .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--success); box-shadow: 0 0 0 3px rgba(85,205,164,.16); flex: none; }
+
+  /* --- workbench --- */
+  .workbench {
+    flex: 1; display: grid; gap: var(--s3); padding: var(--s3);
+    grid-template-columns: 300px minmax(0,1fr) 340px;
+    grid-template-areas: "rail builder dock"; min-height: 0;
+  }
+  .rail { grid-area: rail; } .builder { grid-area: builder; } .dock { grid-area: dock; }
+  .pane { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r3); overflow: hidden; }
+  .pane-head { display: flex; align-items: center; gap: 10px; padding: var(--s4) var(--s4) var(--s3); flex: none; }
+  .pane-head h2 { margin: 0; font-size: .82rem; font-weight: 600; color: var(--ink); }
+  .pane-head .tag { margin-left: auto; color: var(--dim); font-size: .75rem; font-variant-numeric: tabular-nums; }
+
+  .scroll { overflow: auto; max-height: 60vh; }
+
+  /* --- search --- */
+  .search-wrap { position: relative; padding: 0 var(--s4) var(--s3); flex: none; }
+  .search-wrap::before {
+    content: ""; position: absolute; left: 27px; top: 9px; width: 15px; height: 15px;
+    background: var(--dim); pointer-events: none;
+    -webkit-mask: var(--i-search) center/contain no-repeat; mask: var(--i-search) center/contain no-repeat;
+  }
+  .search-wrap input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border-2); color: var(--ink);
+    font-family: var(--sans); font-size: .82rem; padding: 8px 11px 8px 34px; border-radius: var(--r1);
+  }
+  .search-wrap input::placeholder { color: var(--dim); }
+  .search-wrap input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+
+  /* --- navigator --- */
+  #tplList { padding: 0 var(--s2) var(--s3); }
+  .grp { border-top: 1px solid var(--border); }
+  .grp:first-child { border-top: none; }
+  .grp > summary {
+    list-style: none; cursor: pointer; padding: 10px var(--s2); display: flex; align-items: center; gap: var(--s2);
+    font-size: .82rem; font-weight: 600; color: var(--ink); user-select: none;
+  }
+  .grp > summary::-webkit-details-marker { display: none; }
+  .grp > summary::before {
+    content: ""; width: 13px; height: 13px; flex: none; background: var(--dim);
+    -webkit-mask: var(--i-chevron) center/contain no-repeat; mask: var(--i-chevron) center/contain no-repeat;
+    transition: transform .18s ease;
+  }
+  .grp[open] > summary::before { transform: rotate(90deg); }
+  .grp > summary:hover { color: var(--accent-strong); }
+  .grp > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r1); }
+  .grp .count { margin-left: auto; color: var(--dim); font-size: .72rem; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .subcat { font-size: .71rem; font-weight: 500; color: var(--dim); padding: var(--s4) var(--s2) 5px 27px; }
+  .titem button {
+    width: 100%; text-align: left; background: transparent; border: none; color: var(--muted);
+    font-family: var(--sans); font-size: .82rem; padding: 7px 10px 7px 27px; border-radius: var(--r1);
+    cursor: pointer; display: flex; justify-content: space-between; gap: var(--s2); align-items: center;
+  }
+  .titem button:hover { background: var(--surface-2); color: var(--ink); }
+  .titem button[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-strong); font-weight: 550; }
+  .titem button > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+  .titem .type { font-size: .68rem; color: var(--dim); font-family: var(--mono); align-self: center; white-space: nowrap; }
+  .titem button[aria-pressed="true"] .type { color: var(--accent); }
+  .empty-msg { padding: var(--s4) var(--s3); color: var(--dim); font-size: .82rem; list-style: none; }
+
+  /* --- builder --- */
+  .builder-body { padding: var(--s5); }
+  .globals { margin-bottom: var(--s5); border: 1px solid var(--border); border-radius: var(--r2); background: var(--surface-2); overflow: hidden; }
+  .globals > summary { list-style: none; cursor: pointer; padding: 11px var(--s4); display: flex; align-items: center; gap: 10px; font-size: .8rem; font-weight: 550; color: var(--ink); user-select: none; }
+  .globals > summary::-webkit-details-marker { display: none; }
+  .globals > summary .gi { width: 15px; height: 15px; color: var(--muted); flex: none; }
+  .globals > summary .gmeta { margin-left: auto; color: var(--dim); font-size: .74rem; font-weight: 400; }
+  .globals > summary::after { content: ""; width: 12px; height: 12px; flex: none; background: var(--dim); -webkit-mask: var(--i-chevron) center/contain no-repeat; mask: var(--i-chevron) center/contain no-repeat; transition: transform .18s; }
+  .globals[open] > summary::after { transform: rotate(90deg); }
+  .globals[open] > summary { border-bottom: 1px solid var(--border); }
+  .globals > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #globalFields { padding: var(--s4); }
+
+  .sel-name { font-size: 1.05rem; font-weight: 620; color: var(--ink); letter-spacing: -.01em; }
+  .sel-name.placeholder { color: var(--muted); font-weight: 400; font-size: .92rem; display: flex; align-items: center; gap: var(--s2); }
+  .sel-name.placeholder::before { content: ""; width: 18px; height: 18px; flex: none; background: var(--dim); -webkit-mask: var(--i-arrow) center/contain no-repeat; mask: var(--i-arrow) center/contain no-repeat; }
+  .notes { color: var(--muted); font-size: .82rem; line-height: 1.55; margin: var(--s2) 0 0; max-width: 72ch; }
+
+  #genForm { margin-top: var(--s5); }
+  .var-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: var(--s4); }
+  .field { display: grid; gap: 6px; }
+  .field label { font-size: .72rem; font-weight: 600; color: var(--muted); font-family: var(--mono); }
+  .field input {
+    background: var(--bg); border: 1px solid var(--border-2); color: var(--ink);
+    font-family: var(--mono); font-size: .84rem; padding: 8px 11px; border-radius: var(--r1);
+  }
+  .field input::placeholder { color: var(--dim); }
+  .field input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .muted-note { color: var(--dim); font-weight: 400; font-family: var(--sans); }
+
+  .section-label { font-size: .72rem; font-weight: 600; color: var(--muted); margin-bottom: var(--s2); }
+  .opt-wrap { margin-top: var(--s5); }
+  .opt-grid { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .opt-chip { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; border: 1px solid var(--border-2); border-radius: 999px; padding: 5px 12px 5px 10px; font-size: .78rem; font-family: var(--mono); color: var(--muted); background: var(--surface-2); user-select: none; transition: border-color .12s, color .12s, background .12s; }
+  .opt-chip:hover { color: var(--ink); background: var(--surface-3); }
+  .opt-chip:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .opt-chip:has(input:checked) { border-color: var(--accent-line); color: var(--accent-strong); background: var(--accent-tint); }
+  .opt-chip input { width: 13px; height: 13px; }
+  .extra-field { margin-top: var(--s5); }
+
+  .actions { display: flex; gap: var(--s4); flex-wrap: wrap; margin-top: var(--s6); align-items: center; }
+  .btn-primary { display: inline-flex; align-items: center; gap: 7px; background: var(--accent); color: var(--accent-ink); border: none; font-family: var(--sans); font-weight: 600; font-size: .85rem; padding: 9px 18px; border-radius: var(--r1); cursor: pointer; }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-ghost { display: inline-flex; align-items: center; gap: 7px; background: transparent; color: var(--muted); border: 1px solid var(--border-2); font-family: var(--sans); font-size: .82rem; padding: 9px 15px; border-radius: var(--r1); cursor: pointer; }
+  .btn-ghost:hover { border-color: var(--accent-line); color: var(--accent-strong); }
+  .btn-ghost.sm { padding: 4px 10px; font-size: .74rem; }
+  .btn-primary:focus-visible, .btn-ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-primary svg, .btn-ghost svg { width: 14px; height: 14px; flex: none; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:disabled:hover { border-color: var(--border-2); color: var(--muted); }
+  .msg { min-height: 1.2em; font-size: .8rem; margin: var(--s3) 0 0; }
+  .msg.ok { color: var(--success); } .msg.err { color: var(--danger); }
+  .badges { margin-left: auto; display: flex; gap: var(--s2); }
+  .badge { font-size: .7rem; font-family: var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-2); color: var(--muted); }
+  .badge.enc { color: var(--accent); border-color: var(--accent-line); }
+
+  .output-wrap { margin-top: var(--s5); }
+  .output-label { font-size: .72rem; font-weight: 600; color: var(--muted); margin-bottom: var(--s2); }
+  .output {
+    white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px solid var(--border-2);
+    border-radius: var(--r2); padding: var(--s4); min-height: 58px; font-family: var(--mono); font-size: .84rem;
+    color: var(--ink); line-height: 1.6;
+  }
+  .output.empty { color: var(--dim); }
+
+  /* --- dock tabs --- */
+  .tabs { display: flex; gap: var(--s1); padding: var(--s3) var(--s3) 0; border-bottom: 1px solid var(--border); flex: none; }
+  .tab { flex: 1; background: transparent; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); font-family: var(--sans); font-size: .8rem; font-weight: 550; padding: 9px 8px; cursor: pointer; }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--ink); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r1); }
+  .tabpanel { display: flex; flex-direction: column; min-height: 0; }
+  .tabpanel[hidden] { display: none; }
+  .panel-hint { margin: 0; padding: var(--s3) var(--s4); color: var(--muted); font-size: .78rem; line-height: 1.5; flex: none; }
+  .panel-hint b { color: var(--ink); font-weight: 600; }
+  .dock-head { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) var(--s4) var(--s2); flex: none; color: var(--muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
+
+  /* reference rows */
+  #refResults { padding: 0 var(--s2) var(--s3); }
+  .ref-cat { font-size: .71rem; font-weight: 600; color: var(--dim); padding: var(--s4) var(--s2) 4px; }
+  .ref-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; width: 100%; text-align: left; background: transparent; border: none; color: var(--muted); font-family: var(--sans); font-size: .8rem; padding: 6px 10px; border-radius: var(--r1); cursor: pointer; }
+  .ref-row:hover { background: var(--surface-2); }
+  .ref-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .ref-row .key { color: var(--accent-strong); font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+  .ref-row .val, .ref-row .sub { min-width: 0; overflow-wrap: anywhere; }
+  .ref-row .val { color: var(--ink); }
+  .ref-row .sub { color: var(--dim); font-size: .74rem; flex-basis: 100%; }
+
+  /* methodology */
+  .method-phase { font-size: .72rem; font-weight: 600; color: var(--dim); padding: var(--s4) var(--s2) 4px; }
+  .method-item { display: flex; align-items: flex-start; gap: 10px; padding: 6px 10px; border-radius: var(--r1); cursor: pointer; font-size: .82rem; color: var(--muted); line-height: 1.45; }
+  .method-item:hover { background: var(--surface-2); color: var(--ink); }
+  .method-item input { margin-top: 2px; width: 14px; height: 14px; flex: none; }
+  .method-item.done span { color: var(--dim); text-decoration: line-through; }
+  .method-item:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #methodList { padding: 0 var(--s2) var(--s3); }
+  .have-wrap { padding: var(--s4); border-top: 1px solid var(--border); flex: none; }
+  #haveNotes { width: 100%; margin-top: var(--s2); background: var(--bg); border: 1px solid var(--border-2); color: var(--ink); font-family: var(--mono); font-size: .8rem; padding: 9px 11px; border-radius: var(--r1); resize: vertical; line-height: 1.55; }
+  #haveNotes:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+
+  /* --- responsive --- */
+  @media (min-width: 1181px) {
+    body { overflow: hidden; }
+    .app { height: 100vh; height: 100dvh; }
+    .workbench { min-height: 0; overflow: hidden; }
+    .scroll { max-height: none; flex: 1 1 auto; min-height: 0; }
+    .builder-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .tabpanel:not([hidden]) { flex: 1 1 auto; }
+  }
+  @media (max-width: 1180px) {
+    .workbench { grid-template-columns: 260px minmax(0,1fr); grid-template-areas: "rail builder" "rail dock"; }
+  }
+  @media (max-width: 820px) {
+    .workbench { grid-template-columns: 1fr; grid-template-areas: "rail" "builder" "dock"; padding: var(--s2); gap: var(--s2); }
+    .scroll { max-height: 52vh; }
+    .builder-body { padding: var(--s4); }
+    .topbar { padding: var(--s3) var(--s4); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1 class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4-4 4"/><path d="M13 16h6"/></svg></span>Floki</h1>
+    <p class="tagline">Payload &amp; command workbench — assembles and encodes text, never executes.</p>
+    <span class="status"><span class="dot" aria-hidden="true"></span>127.0.0.1</span>
+  </header>
+
+  <main class="workbench">
+    <!-- NAVIGATOR -->
+    <nav class="pane rail" aria-label="Templates">
+      <div class="pane-head"><h2>Templates</h2><span class="tag" id="tplCount"></span></div>
+      <div class="search-wrap"><input id="search" type="search" placeholder="/ filter templates" aria-label="Filter templates"></div>
+      <div id="tplList" class="scroll"></div>
+    </nav>
+
+    <!-- BUILDER -->
+    <section class="pane builder" aria-labelledby="builderH">
+      <div class="pane-head">
+        <h2 id="builderH">Builder</h2>
+        <div class="badges" id="meta" hidden><span class="badge" id="bType"></span><span class="badge enc" id="bEnc"></span></div>
+      </div>
+      <div class="builder-body scroll">
+        <details class="globals" id="globals">
+          <summary><svg class="gi" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="8.5" cy="17" r="2.3"/></svg>Session globals<span class="gmeta">prefill LHOST · DOMAIN · DC_IP · USER · PASS…</span></summary>
+          <div id="globalFields" class="var-grid"></div>
+        </details>
+        <div id="selName" class="sel-name placeholder">Pick a template from the list to build a command.</div>
+        <p class="notes" id="selNotes"></p>
+        <form id="genForm" autocomplete="off">
+          <div id="varFields" class="var-grid"></div>
+          <div id="optWrap" class="opt-wrap" hidden>
+            <div class="section-label">Flags <span class="muted-note">— toggle to append</span></div>
+            <div id="optFields" class="opt-grid"></div>
+          </div>
+          <div class="field extra-field">
+            <label for="extraArgs">Extra args <span class="muted-note">appended verbatim</span></label>
+            <input type="text" id="extraArgs" placeholder="--exec-method wmiexec   -d DOMAIN   --timeout 10">
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn-primary">Render</button>
+            <button type="button" id="copyBtn" class="btn-ghost" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
+          </div>
+          <p class="msg" id="msg" role="status" aria-live="polite"></p>
+        </form>
+        <div class="output-wrap">
+          <div class="output-label">Output</div>
+          <div id="cmd" class="output empty" aria-live="polite">Rendered command will appear here.</div>
+          <p class="notes" id="notes"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOCK: reference + history tabs -->
+    <aside class="pane dock" aria-label="Reference and history">
+      <div class="tabs" role="tablist" aria-label="Dock panels">
+        <button type="button" class="tab" role="tab" id="tab-ref" aria-selected="true" aria-controls="panel-ref">Reference</button>
+        <button type="button" class="tab" role="tab" id="tab-method" aria-selected="false" aria-controls="panel-method" tabindex="-1">Methodology</button>
+      </div>
+      <div class="tabpanel" id="panel-ref" role="tabpanel" aria-labelledby="tab-ref">
+        <p class="panel-hint">Quick-lookup tables — <b>click any row to copy</b>. Filter across ports, default creds, hashcat modes, GTFOBins, wordlist paths &amp; NetExec modules.</p>
+        <div class="search-wrap"><input id="refSearch" type="search" placeholder="/ ports · creds · hashes · gtfobins · nxc -M" aria-label="Search reference data"></div>
+        <div id="refResults" class="scroll" aria-live="polite"></div>
+      </div>
+      <div class="tabpanel" id="panel-method" role="tabpanel" aria-labelledby="tab-method" hidden>
+        <div class="dock-head"><span id="methodProgress">todo</span><button type="button" id="resetMethod" class="btn-ghost sm">reset</button></div>
+        <div id="methodList" class="scroll"></div>
+        <div class="have-wrap">
+          <label for="haveNotes" class="output-label">what you have — creds · hosts · flags</label>
+          <textarea id="haveNotes" rows="5" placeholder="admin:Password123 @ 10.10.5.5&#10;DC01  10.10.5.5&#10;user.txt  a1b2c3…"></textarea>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let templates = [], selected = null;
+
+const VAR_META = {
+  LHOST:  {ph: '10.10.14.7 (your listener)'},
+  LPORT:  {ph: '4444', numeric: true},
+  RHOST:  {ph: 'remote host'},
+  SHELL:  {ph: '/bin/bash', def: '/bin/bash'},
+  DOMAIN: {ph: 'domain.local'},
+  DC_IP:  {ph: 'domain controller IP'},
+  USER:   {ph: 'username (or users file for sprays)'},
+  PASS:   {ph: 'password', secret: true},
+  HASH:   {ph: 'NTLM hash', secret: true},
+  TARGET: {ph: 'host / share / CIDR'},
+  RPORT:  {ph: 'remote/target port', numeric: true},
+  URL:    {ph: 'http://target/path'},
+  FILE:   {ph: 'filename'},
+  IFACE:  {ph: 'tun0 / eth0'},
+  WORDLIST: {ph: '/usr/share/wordlists/rockyou.txt'},
+};
+const VAR_RE = /\{([A-Z_]+)\}/g;
+function varsOf(t) { return [...new Set([...t.template.matchAll(VAR_RE)].map(m => m[1]))]; }
+
+// Global variables: set once, prefill every template's matching fields (per-browser).
+const GLOBAL_VARS = ['LHOST', 'LPORT', 'RHOST', 'DOMAIN', 'DC_IP', 'USER', 'PASS', 'TARGET', 'WORDLIST', 'HASH', 'IFACE'];
+function getGlobals() { try { return JSON.parse(localStorage.getItem('floki_globals') || '{}'); } catch { return {}; } }
+function saveGlobals(g) { try { localStorage.setItem('floki_globals', JSON.stringify(g)); } catch {} }
+function renderGlobals() {
+  const g = getGlobals();
+  const box = $('#globalFields'); box.innerHTML = '';
+  GLOBAL_VARS.forEach(v => {
+    const meta = VAR_META[v] || { ph: v.toLowerCase() };
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.innerHTML =
+      `<label for="g-${v}">${v}</label>` +
+      `<input type="text" id="g-${v}" data-global="${v}"${meta.numeric ? ' inputmode="numeric"' : ''}` +
+      `${meta.secret ? ' autocomplete="off"' : ''} placeholder="${esc(meta.ph)}" value="${esc(g[v] || '')}">`;
+    box.appendChild(field);
+  });
+  box.querySelectorAll('input[data-global]').forEach(i => {
+    i.addEventListener('input', () => {
+      const gg = getGlobals();
+      if (i.value) gg[i.dataset.global] = i.value; else delete gg[i.dataset.global];
+      saveGlobals(gg);
+    });
+  });
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+function setMsg(text, kind) { const m = $('#msg'); m.textContent = text || ''; m.className = 'msg ' + (kind || ''); }
+
+async function loadTemplates() {
+  templates = await (await fetch('/api/templates')).json();
+  $('#tplCount').textContent = templates.length;
+  const list = $('#tplList'); list.innerHTML = '';
+  const groups = new Map();
+  templates.forEach(t => {
+    if (!groups.has(t.group)) groups.set(t.group, new Map());
+    const cats = groups.get(t.group);
+    if (!cats.has(t.category)) cats.set(t.category, []);
+    cats.get(t.category).push(t);
+  });
+  let first = true;
+  groups.forEach((cats, group) => {
+    const details = document.createElement('details');
+    details.className = 'grp';
+    if (first) { details.open = true; first = false; }
+    const count = [...cats.values()].reduce((n, a) => n + a.length, 0);
+    const summary = document.createElement('summary');
+    summary.innerHTML = `${esc(group)}<span class="count">${count}</span>`;
+    details.appendChild(summary);
+    cats.forEach((items, category) => {
+      const sc = document.createElement('div');
+      sc.className = 'subcat'; sc.textContent = category;
+      details.appendChild(sc);
+      items.forEach(t => {
+        const wrap = document.createElement('div');
+        wrap.className = 'titem';
+        wrap.dataset.s = `${t.name} ${t.type} ${t.template} ${group} ${category}`.toLowerCase();
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('aria-pressed', 'false');
+        b.innerHTML = `<span>${esc(t.name)}</span><span class="type">${esc(t.type)}</span>`;
+        b.onclick = () => selectTpl(t.id, b);
+        wrap.appendChild(b);
+        details.appendChild(wrap);
+      });
+    });
+    list.appendChild(details);
+  });
+}
+
+function filterTemplates(q) {
+  q = q.trim().toLowerCase();
+  let anyHit = false;
+  document.querySelectorAll('#tplList .grp').forEach(grp => {
+    let grpVisible = 0;
+    grp.querySelectorAll('.subcat').forEach(sc => {
+      let catVisible = 0;
+      let el = sc.nextElementSibling;
+      while (el && el.classList.contains('titem')) {
+        const hit = !q || el.dataset.s.includes(q);
+        el.hidden = !hit;
+        if (hit) { catVisible++; grpVisible++; }
+        el = el.nextElementSibling;
+      }
+      sc.hidden = catVisible === 0;
+    });
+    grp.hidden = grpVisible === 0;
+    if (q) grp.open = grpVisible > 0;
+    if (grpVisible) anyHit = true;
+  });
+  let msg = $('#tplList .empty-msg');
+  if (!anyHit) {
+    if (!msg) { msg = document.createElement('div'); msg.className = 'empty-msg'; $('#tplList').appendChild(msg); }
+    msg.textContent = 'No templates match "' + q + '".'; msg.hidden = false;
+  } else if (msg) { msg.hidden = true; }
+}
+$('#search').addEventListener('input', e => filterTemplates(e.target.value));
+
+function selectTpl(id, btn) {
+  selected = id;
+  document.querySelectorAll('#tplList button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+  btn.setAttribute('aria-pressed', 'true');
+  const t = templates.find(x => x.id === id);
+  $('#selName').textContent = t.name;
+  $('#selName').classList.remove('placeholder');
+  $('#selNotes').textContent = t.notes || '';
+  const box = $('#varFields'); box.innerHTML = '';
+  const vars = varsOf(t);
+  if (!vars.length) {
+    box.innerHTML = '<p class="notes" style="grid-column:1/-1;margin:0">No inputs — this template is ready as-is.</p>';
+  }
+  const globals = getGlobals();
+  vars.forEach(v => {
+    const meta = VAR_META[v] || {ph: v.toLowerCase()};
+    const val = (globals[v] != null && globals[v] !== '') ? globals[v] : (meta.def || '');
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.innerHTML =
+      `<label for="var-${v}">${v}</label>` +
+      `<input type="text" id="var-${v}" data-var="${v}"${meta.numeric ? ' inputmode="numeric"' : ''}` +
+      `${meta.secret ? ' autocomplete="off"' : ''} placeholder="${esc(meta.ph)}" value="${esc(val)}">`;
+    box.appendChild(field);
+  });
+  // toggleable flags
+  const optWrap = $('#optWrap'), optBox = $('#optFields'); optBox.innerHTML = '';
+  const opts = t.options || [];
+  optWrap.hidden = opts.length === 0;
+  opts.forEach(flag => {
+    const lab = document.createElement('label');
+    lab.className = 'opt-chip';
+    lab.innerHTML = `<input type="checkbox" data-opt value="${esc(flag)}"><span>${esc(flag)}</span>`;
+    optBox.appendChild(lab);
+  });
+  $('#extraArgs').value = '';
+  setMsg('', '');
+  const firstInput = box.querySelector('input');
+  if (firstInput) firstInput.focus();
+}
+
+$('#genForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!selected) { setMsg('Select a template first.', 'err'); return; }
+  const vars = {};
+  document.querySelectorAll('#varFields input[data-var]').forEach(i => { vars[i.dataset.var] = i.value; });
+  const options = [...document.querySelectorAll('#optFields input[data-opt]:checked')].map(i => i.value);
+  const extra = $('#extraArgs').value;
+  const res = await fetch('/api/render', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ template_id: selected, vars, options, extra }),
+  });
+  const data = await res.json();
+  if (!res.ok) { setMsg(data.error || 'render failed', 'err'); return; }
+  showCommand(data);
+  setMsg('Rendered.', 'ok');
+});
+
+function showCommand(data) {
+  const cmd = $('#cmd');
+  cmd.textContent = data.command; cmd.classList.remove('empty');
+  $('#meta').hidden = false;
+  $('#bType').textContent = data.type;
+  $('#bEnc').textContent = 'enc: ' + data.encoding;
+  $('#notes').textContent = data.notes || '';
+  $('#copyBtn').disabled = false;
+  $('#copyBtn').dataset.cmd = data.command;
+}
+$('#copyBtn').addEventListener('click', () => copyText($('#copyBtn').dataset.cmd));
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); setMsg('Copied to clipboard.', 'ok'); }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); setMsg('Copied.', 'ok'); }
+    catch { setMsg('Copy failed — select and copy manually.', 'err'); }
+    ta.remove();
+  }
+}
+
+// --- methodology checklist (check state + notes persist per-browser) ---
+const DONE_KEY = 'floki_done', HAVE_KEY = 'floki_have';
+function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || '{}'); } catch { return {}; } }
+function saveDone(d) { try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch {} }
+
+async function loadMethodology() {
+  const data = await (await fetch('/api/methodology')).json();
+  const done = loadDone();
+  const box = $('#methodList'); box.innerHTML = '';
+  (data.phases || []).forEach(ph => {
+    const h = document.createElement('div'); h.className = 'method-phase'; h.textContent = ph.phase;
+    box.appendChild(h);
+    (ph.items || []).forEach(text => {
+      const key = ph.phase + '|' + text;
+      const checked = !!done[key];
+      const lab = document.createElement('label');
+      lab.className = 'method-item' + (checked ? ' done' : '');
+      lab.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''}><span>${esc(text)}</span>`;
+      lab.querySelector('input').addEventListener('change', e => {
+        const d = loadDone();
+        if (e.target.checked) d[key] = 1; else delete d[key];
+        saveDone(d);
+        lab.classList.toggle('done', e.target.checked);
+        updateProgress();
+      });
+      box.appendChild(lab);
+    });
+  });
+  updateProgress();
+}
+function updateProgress() {
+  const items = [...document.querySelectorAll('#methodList input[type=checkbox]')];
+  const n = items.filter(i => i.checked).length;
+  $('#methodProgress').textContent = `${n}/${items.length} done`;
+}
+$('#resetMethod').addEventListener('click', () => { try { localStorage.removeItem(DONE_KEY); } catch {} loadMethodology(); });
+
+const have = $('#haveNotes');
+try { have.value = localStorage.getItem(HAVE_KEY) || ''; } catch {}
+have.addEventListener('input', () => { try { localStorage.setItem(HAVE_KEY, have.value); } catch {} });
+
+const REF_RENDER = {
+  ports: { label: 'Ports', row: r => ({ key: `${r.port}/${r.proto}`, val: r.service, sub: r.notes, copy: String(r.port) }) },
+  creds: { label: 'Default credentials', row: r => ({ key: r.product, val: `${r.username || '(none)'} : ${r.password || '(blank)'}`, sub: r.notes, copy: r.password || r.username || '' }) },
+  hashmodes: { label: 'Hashcat modes', row: r => ({ key: `-m ${r.mode}`, val: r.name, sub: r.example, copy: `hashcat -m ${r.mode}` }) },
+  gtfobins: { label: 'GTFOBins', row: r => ({ key: r.binary, val: r.function, sub: r.command, copy: r.command }) },
+  wordlists: { label: 'Wordlists', row: r => ({ key: r.name, val: r.path, sub: r.use, copy: r.path }) },
+  modules: { label: 'NetExec modules', row: r => ({ key: r.name, val: r.protocol, sub: r.description, copy: '-M ' + r.name }) },
+};
+let refTimer;
+async function loadReference(q) {
+  const data = await (await fetch('/api/reference?q=' + encodeURIComponent(q || ''))).json();
+  const box = $('#refResults'); box.innerHTML = '';
+  let total = 0;
+  Object.keys(REF_RENDER).forEach(table => {
+    const rows = data[table] || [];
+    total += rows.length;
+    if (!rows.length) return;
+    const h = document.createElement('div');
+    h.className = 'ref-cat'; h.textContent = REF_RENDER[table].label;
+    box.appendChild(h);
+    rows.forEach(r => {
+      const m = REF_RENDER[table].row(r);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'ref-row'; b.title = 'Copy: ' + m.copy;
+      b.innerHTML = `<span class="key">${esc(m.key)}</span><span class="val">${esc(m.val)}</span>` +
+        (m.sub ? `<span class="sub">${esc(m.sub)}</span>` : '');
+      b.onclick = () => copyText(m.copy);
+      box.appendChild(b);
+    });
+  });
+  if (!total) box.innerHTML = '<div class="empty-msg">No reference entries match.</div>';
+}
+$('#refSearch').addEventListener('input', e => { clearTimeout(refTimer); const q = e.target.value; refTimer = setTimeout(() => loadReference(q), 120); });
+
+// dock tabs
+const tabs = [...document.querySelectorAll('.tab')];
+function selectTab(tab) {
+  tabs.forEach(t => {
+    const on = t === tab;
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    t.tabIndex = on ? 0 : -1;
+    document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+  });
+}
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => selectTab(tab));
+  tab.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    let i = tabs.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : -1);
+    i = (i + tabs.length) % tabs.length;
+    tabs[i].focus(); selectTab(tabs[i]);
+  });
+});
+
+renderGlobals();
+loadTemplates();
+loadReference('');
+loadMethodology();
+</script>
+</body>
+</html>

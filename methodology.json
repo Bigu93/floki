@@ -1,0 +1,67 @@
+{
+  "_comment": "Editable methodology. Drives the interactive TODO checklist in the UI. Check state is stored per-browser (localStorage), not on the server.",
+  "phases": [
+    { "phase": "0 · Scope & setup", "items": [
+      "Confirm scope, in-scope hosts, and rules of engagement",
+      "Start an engagement log (host, time, action, result)",
+      "Start a listener before firing any shell (nc -lvnp)",
+      "Note your tun0/attack IP for LHOST"
+    ]},
+    { "phase": "1 · Recon / enumeration", "items": [
+      "Full TCP port scan (nmap -p-)",
+      "Service/version + default scripts on open ports (-sV -sC)",
+      "Top UDP ports (nmap -sU --top-ports 100)",
+      "Map each service to an attack surface",
+      "Web: content discovery (gobuster/ffuf/feroxbuster) + nikto",
+      "SMB: nxc smb --shares / enum4linux-ng / smbclient",
+      "DNS/SNMP where present"
+    ]},
+    { "phase": "2 · Foothold", "items": [
+      "Identify the weakest service / known CVE",
+      "Pick a reverse-shell template matching what the target runs",
+      "Deliver payload (URL-encode for web params, base64 for PowerShell)",
+      "Catch the shell on your listener"
+    ]},
+    { "phase": "3 · Stabilize the shell", "items": [
+      "Upgrade to a TTY (python pty + stty raw -echo; fg)",
+      "export TERM=xterm and set rows/columns",
+      "Confirm user, hostname, OS, arch, network position"
+    ]},
+    { "phase": "4 · Local privilege escalation", "items": [
+      "Run linpeas / winpeas",
+      "Linux: sudo -l, SUID, capabilities, cron, writable paths (GTFOBins)",
+      "Windows: whoami /priv, services, scheduled tasks, systeminfo -> missing patches",
+      "Escalate to root / SYSTEM"
+    ]},
+    { "phase": "5 · Active Directory — no credentials", "items": [
+      "Find DCs (DNS SRV / port scan 88,389,445)",
+      "Null/guest enum (nxc smb --null-session, rpcclient, enum4linux-ng)",
+      "Harvest usernames (kerbrute userenum)",
+      "Responder poisoning -> crack NetNTLMv2 (hashcat -m 5600)",
+      "AS-REP roast accounts without pre-auth"
+    ]},
+    { "phase": "6 · Active Directory — first credential", "items": [
+      "Read the password policy BEFORE spraying",
+      "Validate + find local admin (nxc smb -> Pwn3d!)",
+      "Spray carefully (kerbrute / nxc), stay under lockout",
+      "Kerberoast (GetUserSPNs / nxc ldap --kerberoasting)",
+      "Collect BloodHound graph, find paths to DA"
+    ]},
+    { "phase": "7 · Active Directory — host foothold", "items": [
+      "Get a shell (evil-winrm / psexec / wmiexec)",
+      "Dump local creds where admin (nxc smb --sam --lsa / secretsdump)",
+      "Reuse creds/hashes laterally (pass-the-hash)"
+    ]},
+    { "phase": "8 · Active Directory — domain dominance", "items": [
+      "DCSync with replication rights (nxc smb --ntds / secretsdump -just-dc)",
+      "krbtgt -> golden ticket (only if authorized)",
+      "Document every credential, path, and host owned"
+    ]},
+    { "phase": "9 · Pivot & loot", "items": [
+      "Identify reachable internal hosts/subnets",
+      "Set up tunneling (chisel / ssh -D) as scope allows",
+      "Re-run recon from the new vantage point",
+      "Collect required proof; note cleanup (files, listeners, artifacts)"
+    ]}
+  ]
+}

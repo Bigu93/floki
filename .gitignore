@@ -1,0 +1,14 @@
+# generated on startup from templates.json + reference_seed.json
+floki.db
+
+# private notes / reference material (keep engagement notes out of git)
+reference/
+.impeccable/
+notes/
+*.local.md
+PRODUCT.md
+DESIGN.md
+
+# python
+__pycache__/
+*.pyc
