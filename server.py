@@ -24,6 +24,8 @@ REFERENCE_SEED = HERE / "reference_seed.json"
 METHODOLOGY_FILE = HERE / "methodology.json"
 DB_FILE = HERE / "floki.db"
 
+MAX_BODY = 64 * 1024  # cap on POST body size; the tool only ever gets small JSON
+
 # The runtime store is floki.db, rebuilt on startup from the editable seed files.
 # `options` holds each template's toggleable flags (JSON list, stored as text).
 TEMPLATE_COLS = ("id", "group", "category", "name", "type", "encoding", "template", "notes", "options")
@@ -131,9 +133,9 @@ def render(template, values, options=None, extra=""):
             raise ValueError(f"{var} must be a number between 1 and 65535.")
         resolved[var] = str(int(raw)) if var in PORT_VARS else raw
 
-    cmd = body
-    for var, val in resolved.items():
-        cmd = cmd.replace("{" + var + "}", val)
+    # Single-pass substitution: replace every {VAR} in one sweep so a value
+    # that happens to contain a literal {OTHER_VAR} token is never re-expanded.
+    cmd = VAR_RE.sub(lambda m: resolved.get(m.group(1), m.group(0)), body)
 
     # Append toggled flags (whitelisted to the template's declared options),
     # then any free-form extra arguments.
@@ -255,6 +257,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", 0))
+            if length > MAX_BODY:
+                self._json(413, {"error": "request body too large"})
+                return
             req = json.loads(self.rfile.read(length) or b"{}")
         except (ValueError, TypeError):
             self._json(400, {"error": "invalid request body"})

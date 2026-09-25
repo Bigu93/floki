@@ -79,6 +79,14 @@ def test_rport_is_validated():
         pass
 
 
+def test_value_with_placeholder_token_not_re_expanded():
+    # A value that contains a literal {VAR} token must be substituted once, not
+    # re-expanded on a later pass (single-pass substitution).
+    tpl = {"template": "{USER} {PASS}", "encoding": "raw"}
+    out = server.render(tpl, {"USER": "{PASS}", "PASS": "secret"})
+    assert out == "{PASS} secret", out
+
+
 def test_options_whitelist_and_extra():
     tpl = {"template": "nxc smb {TARGET} -u {USER} -p {PASS}", "encoding": "raw",
            "options": ["--shares", "--users", "--sam"]}

@@ -376,8 +376,15 @@ function renderGlobals() {
 function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 function setMsg(text, kind) { const m = $('#msg'); m.textContent = text || ''; m.className = 'msg ' + (kind || ''); }
 
+async function fetchJSON(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) { let e; try { e = (await res.json()).error; } catch {} throw new Error(e || ('HTTP ' + res.status)); }
+  return res.json();
+}
+
 async function loadTemplates() {
-  templates = await (await fetch('/api/templates')).json();
+  try { templates = await fetchJSON('/api/templates'); }
+  catch (err) { setMsg('Could not load templates: ' + err.message, 'err'); return; }
   $('#tplCount').textContent = templates.length;
   const list = $('#tplList'); list.innerHTML = '';
   const groups = new Map();
@@ -493,12 +500,13 @@ $('#genForm').addEventListener('submit', async e => {
   document.querySelectorAll('#varFields input[data-var]').forEach(i => { vars[i.dataset.var] = i.value; });
   const options = [...document.querySelectorAll('#optFields input[data-opt]:checked')].map(i => i.value);
   const extra = $('#extraArgs').value;
-  const res = await fetch('/api/render', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ template_id: selected, vars, options, extra }),
-  });
-  const data = await res.json();
-  if (!res.ok) { setMsg(data.error || 'render failed', 'err'); return; }
+  let data;
+  try {
+    data = await fetchJSON('/api/render', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ template_id: selected, vars, options, extra }),
+    });
+  } catch (err) { setMsg(err.message || 'render failed', 'err'); return; }
   showCommand(data);
   setMsg('Rendered.', 'ok');
 });
@@ -532,7 +540,9 @@ function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || 
 function saveDone(d) { try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch {} }
 
 async function loadMethodology() {
-  const data = await (await fetch('/api/methodology')).json();
+  let data;
+  try { data = await fetchJSON('/api/methodology'); }
+  catch { data = { phases: [] }; }
   const done = loadDone();
   const box = $('#methodList'); box.innerHTML = '';
   (data.phases || []).forEach(ph => {
@@ -577,7 +587,9 @@ const REF_RENDER = {
 };
 let refTimer;
 async function loadReference(q) {
-  const data = await (await fetch('/api/reference?q=' + encodeURIComponent(q || ''))).json();
+  let data;
+  try { data = await fetchJSON('/api/reference?q=' + encodeURIComponent(q || '')); }
+  catch { data = {}; }
   const box = $('#refResults'); box.innerHTML = '';
   let total = 0;
   Object.keys(REF_RENDER).forEach(table => {
