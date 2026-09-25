@@ -300,6 +300,13 @@
   .tg-status input { width: 12px; height: 12px; }
   .tg-notes { width: 100%; background: var(--bg); border: 1px solid var(--border-2); color: var(--ink); font-family: var(--mono); font-size: .76rem; padding: 6px 9px; border-radius: var(--r1); resize: vertical; line-height: 1.5; }
   .tg-notes:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .tg-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
+  .tg-badge { font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); padding: 2px 6px; border-radius: 999px; flex: none; }
+  .tg-actions { display: flex; align-items: center; gap: var(--s3); margin-bottom: 8px; }
+  .tg-use { padding: 4px 14px; }
+  .tg-use.on { border-color: var(--accent-line); color: var(--accent-strong); background: var(--accent-tint); cursor: default; }
+  .tg-dc { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; color: var(--muted); cursor: pointer; user-select: none; }
+  .tg-dc input { width: 12px; height: 12px; }
 
   /* --- render history --- */
   .dh-actions { display: inline-flex; gap: var(--s2); }
@@ -486,9 +493,15 @@ const STRIP_VARS = ['LHOST', 'LPORT', 'DOMAIN', 'DC_IP', 'USER'];
 function renderStrip() {
   const strip = $('#globalStrip'); if (!strip) return;
   const g = getGlobals();
-  const set = STRIP_VARS.filter(v => g[v]);
-  strip.hidden = set.length === 0;
-  strip.innerHTML = set.map(v => `<span class="gk">${v}</span> <span class="gv">${esc(g[v])}</span>`).join('&nbsp;·&nbsp;');
+  const parts = [];
+  const actId = getActive();
+  if (actId) {
+    const t = loadTargets().find(x => x.id === actId);
+    if (t) parts.push(`<span class="gk">▸</span> <span class="gv">${esc(t.name || t.ip || 'target')}</span>`);
+  }
+  STRIP_VARS.forEach(v => { if (g[v]) parts.push(`<span class="gk">${v}</span> <span class="gv">${esc(g[v])}</span>`); });
+  strip.hidden = parts.length === 0;
+  strip.innerHTML = parts.join('&nbsp;·&nbsp;');
 }
 $('#globalStrip').addEventListener('click', () => {
   const d = $('#globals'); d.open = true;
@@ -879,12 +892,30 @@ $('#exportHist').addEventListener('click', () => {
 });
 
 // --- target / points tracker (OSCP-style board, per-browser) ---
-const TARGETS_KEY = 'floki_targets';
+const TARGETS_KEY = 'floki_targets', ACTIVE_KEY = 'floki_active_target';
 const TG_STAGES = ['recon', 'foothold', 'root', 'proof'];
 function loadTargets() { try { return JSON.parse(localStorage.getItem(TARGETS_KEY) || '[]'); } catch { return []; } }
 function saveTargets(a) { try { localStorage.setItem(TARGETS_KEY, JSON.stringify(a)); } catch {} }
+function getActive() { try { return localStorage.getItem(ACTIVE_KEY) || ''; } catch { return ''; } }
+
+// Make a target the active box: push its IP into TARGET/RHOST (and DC_IP if it's
+// flagged a DC), refresh the globals + strip, and sync the open template's fields.
+function activateTarget(t) {
+  if (!t.ip) { toast('Target has no IP', 'err'); return; }
+  const g = getGlobals();
+  g.TARGET = t.ip; g.RHOST = t.ip;
+  if (t.dc) g.DC_IP = t.ip;
+  saveGlobals(g);
+  try { localStorage.setItem(ACTIVE_KEY, t.id); } catch {}
+  renderGlobals();  // refresh Session Globals inputs + topbar strip
+  // sync matching fields in the currently open builder template, without disturbing others
+  ['TARGET', 'RHOST'].concat(t.dc ? ['DC_IP'] : []).forEach(v => { const el = $('#var-' + v); if (el) el.value = t.ip; });
+  renderTargets();
+  toast('Active target: ' + (t.name || t.ip));
+}
 function renderTargets() {
   const arr = loadTargets();
+  const actId = getActive();
   const total = arr.reduce((n, t) => n + (+t.points || 0), 0);
   const earned = arr.reduce((n, t) => n + (t.proof ? (+t.points || 0) : 0), 0);
   const rooted = arr.filter(t => t.root).length;
@@ -892,19 +923,32 @@ function renderTargets() {
   const list = $('#targetList'); list.innerHTML = '';
   if (!arr.length) { list.innerHTML = '<div class="empty-msg">No targets yet. Add boxes to track recon → root → proof.</div>'; return; }
   arr.forEach(t => {
+    const active = t.id === actId;
     const card = document.createElement('div');
-    card.className = 'tg-card' + (t.root && t.proof ? ' done' : '');
+    card.className = 'tg-card' + (t.root && t.proof ? ' done' : '') + (active ? ' active' : '');
     card.innerHTML =
-      `<div class="tg-top"><span class="tg-name">${esc(t.name || '—')}</span>` +
+      `<div class="tg-top">` + (active ? `<span class="tg-badge">active</span>` : '') +
+      `<span class="tg-name">${esc(t.name || '—')}</span>` +
       `<span class="tg-ip">${esc(t.ip || '')}</span>` +
       `<span class="tg-pts">${esc(String(t.points || 0))} pts</span>` +
       `<button type="button" class="tg-del" title="Delete" aria-label="Delete target">×</button></div>` +
       `<div class="tg-status">` + TG_STAGES.map(s => `<label><input type="checkbox" data-stage="${s}" ${t[s] ? 'checked' : ''}>${s}</label>`).join('') + `</div>` +
+      `<div class="tg-actions">` +
+      `<button type="button" class="tg-use btn-ghost sm${active ? ' on' : ''}">${active ? 'Active' : 'Use'}</button>` +
+      `<label class="tg-dc" title="Domain Controller — Use also fills DC_IP"><input type="checkbox" data-flag="dc" ${t.dc ? 'checked' : ''}>DC</label>` +
+      `</div>` +
       `<textarea class="tg-notes" rows="2" placeholder="creds · open ports · path to root"></textarea>`;
     card.querySelector('.tg-notes').value = t.notes || '';
     card.querySelectorAll('input[data-stage]').forEach(inp => inp.addEventListener('change', () => { t[inp.dataset.stage] = inp.checked; saveTargets(arr); renderTargets(); }));
+    card.querySelector('input[data-flag="dc"]').addEventListener('change', e => { t.dc = e.target.checked; saveTargets(arr); if (t.id === getActive()) activateTarget(t); });
+    card.querySelector('.tg-use').addEventListener('click', () => activateTarget(t));
     card.querySelector('.tg-notes').addEventListener('input', e => { t.notes = e.target.value; saveTargets(arr); });
-    card.querySelector('.tg-del').addEventListener('click', () => { if (confirm('Delete ' + (t.name || 'target') + '?')) { saveTargets(arr.filter(x => x.id !== t.id)); renderTargets(); } });
+    card.querySelector('.tg-del').addEventListener('click', () => {
+      if (confirm('Delete ' + (t.name || 'target') + '?')) {
+        if (t.id === getActive()) { try { localStorage.removeItem(ACTIVE_KEY); } catch {} renderStrip(); }
+        saveTargets(arr.filter(x => x.id !== t.id)); renderTargets();
+      }
+    });
     list.appendChild(card);
   });
 }
@@ -913,7 +957,7 @@ $('#targetForm').addEventListener('submit', e => {
   const name = $('#tgName').value.trim(), ip = $('#tgIp').value.trim(), points = +$('#tgPts').value || 0;
   if (!name && !ip) { toast('Name or IP required', 'err'); return; }
   const arr = loadTargets();
-  arr.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), name, ip, points, recon: false, foothold: false, root: false, proof: false, notes: '' });
+  arr.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), name, ip, points, dc: false, recon: false, foothold: false, root: false, proof: false, notes: '' });
   saveTargets(arr);
   $('#tgName').value = ''; $('#tgIp').value = ''; $('#tgPts').value = '';
   renderTargets(); $('#tgName').focus();
