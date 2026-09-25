@@ -274,6 +274,13 @@
   /* --- keyboard cursor on template list --- */
   #tplList .titem.kbd > button { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+  /* --- axis segmented control (re-group templates by) --- */
+  .axis-switch { display: flex; gap: 2px; margin: 0 0 var(--s3); padding: 3px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r2); }
+  .axis-switch button { flex: 1; background: transparent; border: none; color: var(--dim); font-family: var(--sans); font-size: .74rem; font-weight: 550; padding: 5px 4px; border-radius: var(--r1); cursor: pointer; transition: background .12s, color .12s; }
+  .axis-switch button:hover { color: var(--ink); }
+  .axis-switch button[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-strong); }
+  .axis-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
   /* --- render history --- */
   .dh-actions { display: inline-flex; gap: var(--s2); }
   .hist-row { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; background: transparent; border: none; border-radius: var(--r1); padding: 7px 10px; cursor: pointer; color: var(--muted); font-family: var(--sans); }
@@ -303,6 +310,12 @@
     <nav class="pane rail" aria-label="Templates">
       <div class="pane-head"><h2>Templates</h2><span class="tag" id="tplCount"></span></div>
       <div class="search-wrap"><input id="search" type="search" placeholder="/ filter templates" aria-label="Filter templates"></div>
+      <div class="axis-switch" role="group" aria-label="Group templates by">
+        <button type="button" data-axis="group" aria-pressed="true">Group</button>
+        <button type="button" data-axis="phase" aria-pressed="false">Phase</button>
+        <button type="button" data-axis="tool" aria-pressed="false">Tool</button>
+        <button type="button" data-axis="platform" aria-pressed="false">Platform</button>
+      </div>
       <div id="tplList" class="scroll"></div>
     </nav>
 
@@ -448,20 +461,69 @@ async function fetchJSON(url, opts) {
   return res.json();
 }
 
+// --- axis derivation: view the same templates grouped different ways ---
+// Phase and Platform aren't stored on templates; they're derived here from the
+// group/type so the mappings stay in one place and are easy to tweak.
+const PHASE_BY_GROUP = {
+  'Enumeration': '1 · Recon & Enum',
+  'Reverse Shells': '2 · Foothold & Access',
+  'Web Attacks': '2 · Foothold & Access',
+  'Brute Force': '2 · Foothold & Access',
+  'Listeners & Upgrade': '2 · Foothold & Access',
+  'Active Directory': '3 · Active Directory',
+  'NetExec (nxc)': '3 · Active Directory',
+  'Privilege Escalation': '4 · Privilege Escalation',
+  'File Transfer': '5 · Post-Exploitation',
+  'Pivoting & Tunneling': '5 · Post-Exploitation',
+  'Databases': '5 · Post-Exploitation',
+  'Cracking': '6 · Credentials & Cracking',
+};
+const WIN_TYPES = new Set(['powershell','evil-winrm','impacket','certipy','rpcclient','ldapsearch','ldapdomaindump','kerbrute','bloodhound','responder','rdp','windows','smbmap','smbclient','enum4linux']);
+const WEB_TYPES = new Set(['gobuster','ffuf','feroxbuster','wpscan','nikto','sqlmap','whatweb','wfuzz','web']);
+const DB_TYPES = new Set(['mysql','postgres','redis','mssql']);
+const LINUX_TYPES = new Set(['linux','bash','sh']);
+const PLATFORM_ORDER = ['Linux','Windows / AD','Web','Databases','Cross-platform'];
+function phaseOf(t) { return PHASE_BY_GROUP[t.group] || '9 · Other'; }
+function platformOf(t) {
+  const g = t.group, ty = (t.type || '').toLowerCase();
+  if (g === 'Web Attacks' || WEB_TYPES.has(ty)) return 'Web';
+  if (g === 'Active Directory' || g === 'NetExec (nxc)' || WIN_TYPES.has(ty)) return 'Windows / AD';
+  if (g === 'Databases' || DB_TYPES.has(ty)) return 'Databases';
+  if (LINUX_TYPES.has(ty)) return 'Linux';
+  return 'Cross-platform';
+}
+// axis -> {l1: top-level key, l2: sub-header key, sort: order of top-level keys}
+const AXES = {
+  group:    { l1: t => t.group,      l2: t => t.category, sort: null },              // file order
+  phase:    { l1: phaseOf,           l2: t => t.group,    sort: (a,b) => a.localeCompare(b) },
+  tool:     { l1: t => t.type || 'other', l2: t => t.group, sort: (a,b) => a.localeCompare(b) },
+  platform: { l1: platformOf,        l2: t => t.group,    sort: (a,b) => PLATFORM_ORDER.indexOf(a) - PLATFORM_ORDER.indexOf(b) },
+};
+let currentAxis = 'group';
+
 async function loadTemplates() {
   try { templates = await fetchJSON('/api/templates'); }
   catch (err) { setMsg('Could not load templates: ' + err.message, 'err'); return; }
   $('#tplCount').textContent = templates.length;
+  renderTree(currentAxis);
+}
+
+function renderTree(axis) {
+  currentAxis = axis;
+  const { l1, l2, sort } = AXES[axis] || AXES.group;
   const list = $('#tplList'); list.innerHTML = '';
   const groups = new Map();
   templates.forEach(t => {
-    if (!groups.has(t.group)) groups.set(t.group, new Map());
-    const cats = groups.get(t.group);
-    if (!cats.has(t.category)) cats.set(t.category, []);
-    cats.get(t.category).push(t);
+    const g = l1(t), c = l2(t) || '—';
+    if (!groups.has(g)) groups.set(g, new Map());
+    const cats = groups.get(g);
+    if (!cats.has(c)) cats.set(c, []);
+    cats.get(c).push(t);
   });
+  let entries = [...groups.entries()];
+  if (sort) entries.sort((a, b) => sort(a[0], b[0]));
   let first = true;
-  groups.forEach((cats, group) => {
+  entries.forEach(([group, cats]) => {
     const details = document.createElement('details');
     details.className = 'grp';
     if (first) { details.open = true; first = false; }
@@ -476,10 +538,11 @@ async function loadTemplates() {
       items.forEach(t => {
         const wrap = document.createElement('div');
         wrap.className = 'titem';
-        wrap.dataset.s = `${t.name} ${t.type} ${t.template} ${group} ${category} ${t.notes || ''}`.toLowerCase();
+        wrap.dataset.s = `${t.name} ${t.type} ${t.template} ${t.group} ${t.category} ${t.notes || ''}`.toLowerCase();
         const b = document.createElement('button');
         b.type = 'button';
-        b.setAttribute('aria-pressed', 'false');
+        b.dataset.id = t.id;
+        b.setAttribute('aria-pressed', String(t.id === selected));
         b.innerHTML = `<span>${esc(t.name)}</span><span class="type">${esc(t.type)}</span>`;
         b.onclick = () => selectTpl(t.id, b);
         wrap.appendChild(b);
@@ -488,7 +551,20 @@ async function loadTemplates() {
     });
     list.appendChild(details);
   });
+  // re-apply any active filter to the freshly built tree
+  const q = $('#search').value;
+  if (q.trim()) filterTemplates(q);
 }
+
+// axis segmented control
+document.querySelectorAll('.axis-switch button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.axis-switch button').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    btn.setAttribute('aria-pressed', 'true');
+    kbdIndex = -1;
+    renderTree(btn.dataset.axis);
+  });
+});
 
 function filterTemplates(q) {
   // AND-tokenize: every whitespace-separated term must match (in any order),
