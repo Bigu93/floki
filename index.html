@@ -113,10 +113,24 @@
   .grp > summary:hover { color: var(--accent-strong); }
   .grp > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r1); }
   .grp .count { margin-left: auto; color: var(--dim); font-size: .72rem; font-weight: 400; font-variant-numeric: tabular-nums; }
-  .subcat { font-size: .71rem; font-weight: 500; color: var(--dim); padding: var(--s4) var(--s2) 5px 27px; }
+  .cat > summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: var(--s2);
+    padding: 6px var(--s2) 6px 27px; font-size: .72rem; font-weight: 600; letter-spacing: .01em;
+    color: var(--muted); text-transform: uppercase; user-select: none;
+  }
+  .cat > summary::-webkit-details-marker { display: none; }
+  .cat > summary::before {
+    content: ""; width: 11px; height: 11px; flex: none; background: var(--dim);
+    -webkit-mask: var(--i-chevron) center/contain no-repeat; mask: var(--i-chevron) center/contain no-repeat;
+    transition: transform .18s ease;
+  }
+  .cat[open] > summary::before { transform: rotate(90deg); }
+  .cat > summary:hover { color: var(--accent-strong); }
+  .cat > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r1); }
+  .cat .count { margin-left: auto; color: var(--dim); font-size: .68rem; font-weight: 400; font-variant-numeric: tabular-nums; text-transform: none; }
   .titem button {
     width: 100%; text-align: left; background: transparent; border: none; color: var(--muted);
-    font-family: var(--sans); font-size: .82rem; padding: 7px 10px 7px 27px; border-radius: var(--r1);
+    font-family: var(--sans); font-size: .82rem; padding: 7px 10px 7px 38px; border-radius: var(--r1);
     cursor: pointer; display: flex; justify-content: space-between; gap: var(--s2); align-items: center;
   }
   .titem button:hover { background: var(--surface-2); color: var(--ink); }
@@ -578,19 +592,24 @@ function renderTree(axis) {
   });
   let entries = [...groups.entries()];
   if (sort) entries.sort((a, b) => sort(a[0], b[0]));
-  let first = true;
   entries.forEach(([group, cats]) => {
+    // groups start collapsed (clean start); a group with a single category
+    // opens that category so drilling isn't a pointless extra click.
     const details = document.createElement('details');
     details.className = 'grp';
-    if (first) { details.open = true; first = false; }
     const count = [...cats.values()].reduce((n, a) => n + a.length, 0);
     const summary = document.createElement('summary');
     summary.innerHTML = `${esc(group)}<span class="count">${count}</span>`;
     details.appendChild(summary);
+    const singleCat = cats.size === 1;
     cats.forEach((items, category) => {
-      const sc = document.createElement('div');
-      sc.className = 'subcat'; sc.textContent = category;
-      details.appendChild(sc);
+      const cat = document.createElement('details');
+      cat.className = 'cat';
+      if (singleCat) cat.open = true;
+      const cs = document.createElement('summary');
+      cs.className = 'subcat';
+      cs.innerHTML = `${esc(category)}<span class="count">${items.length}</span>`;
+      cat.appendChild(cs);
       items.forEach(t => {
         const wrap = document.createElement('div');
         wrap.className = 'titem';
@@ -602,8 +621,9 @@ function renderTree(axis) {
         b.innerHTML = `<span>${esc(t.name)}</span><span class="type">${esc(t.type)}</span>`;
         b.onclick = () => selectTpl(t.id, b);
         wrap.appendChild(b);
-        details.appendChild(wrap);
+        cat.appendChild(wrap);
       });
+      details.appendChild(cat);
     });
     list.appendChild(details);
   });
@@ -629,19 +649,21 @@ function filterTemplates(q) {
   let anyHit = false;
   document.querySelectorAll('#tplList .grp').forEach(grp => {
     let grpVisible = 0;
-    grp.querySelectorAll('.subcat').forEach(sc => {
+    grp.querySelectorAll('details.cat').forEach(cat => {
       let catVisible = 0;
-      let el = sc.nextElementSibling;
-      while (el && el.classList.contains('titem')) {
+      cat.querySelectorAll('.titem').forEach(el => {
         const hit = !terms.length || terms.every(t => el.dataset.s.includes(t));
         el.hidden = !hit;
         if (hit) { catVisible++; grpVisible++; }
-        el = el.nextElementSibling;
-      }
-      sc.hidden = catVisible === 0;
+      });
+      cat.hidden = catVisible === 0;
+      // searching expands matching categories; clearing resets to the default
+      // (single-category groups stay open, everything else collapses)
+      if (terms.length) cat.open = catVisible > 0;
+      else cat.open = cat.querySelectorAll('.titem').length <= 1;
     });
     grp.hidden = grpVisible === 0;
-    if (terms.length) grp.open = grpVisible > 0;
+    grp.open = terms.length ? grpVisible > 0 : false;
     if (grpVisible) anyHit = true;
   });
   let msg = $('#tplList .empty-msg');
@@ -957,10 +979,13 @@ $('#targetForm').addEventListener('submit', e => {
   const name = $('#tgName').value.trim(), ip = $('#tgIp').value.trim(), points = +$('#tgPts').value || 0;
   if (!name && !ip) { toast('Name or IP required', 'err'); return; }
   const arr = loadTargets();
-  arr.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), name, ip, points, dc: false, recon: false, foothold: false, root: false, proof: false, notes: '' });
+  const t = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), name, ip, points, dc: false, recon: false, foothold: false, root: false, proof: false, notes: '' };
+  arr.push(t);
   saveTargets(arr);
   $('#tgName').value = ''; $('#tgIp').value = ''; $('#tgPts').value = '';
-  renderTargets(); $('#tgName').focus();
+  // a freshly added box becomes the active target so its IP flows into globals right away
+  if (t.ip) activateTarget(t); else renderTargets();
+  $('#tgName').focus();
 });
 $('#exportTargets').addEventListener('click', () => {
   const arr = loadTargets();
@@ -981,7 +1006,8 @@ function typingTarget(el) {
   return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 }
 function visibleItems() {
-  return [...document.querySelectorAll('#tplList .titem')].filter(el => !el.hidden && el.offsetParent !== null);
+  // not filtered out, and not inside any collapsed group/category
+  return [...document.querySelectorAll('#tplList .titem')].filter(el => !el.hidden && !el.closest('details:not([open])'));
 }
 let kbdIndex = -1;
 function moveCursor(delta) {
