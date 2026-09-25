@@ -62,6 +62,20 @@
       "Set up tunneling (chisel / ssh -D) as scope allows",
       "Re-run recon from the new vantage point",
       "Collect required proof; note cleanup (files, listeners, artifacts)"
+    ]},
+    { "phase": "10 · Proof & documentation", "items": [
+      "Grab the flag: local.txt / proof.txt (and root/Administrator proof)",
+      "Screenshot the flag next to whoami/id (Linux) or whoami (Windows)",
+      "Screenshot ip a / ipconfig on the target showing its IP",
+      "Record the exact exploitation steps + commands while they're fresh",
+      "Save every credential, hash, and ticket obtained (with source host)",
+      "Note the IP/host each proof came from — don't mix targets"
+    ]},
+    { "phase": "11 · Reporting & cleanup", "items": [
+      "Write each finding: affected host, steps to reproduce, impact",
+      "Confirm all screenshots are legible and flags match the target IP",
+      "List artifacts left on targets (uploads, shells, listeners) for cleanup",
+      "Cross-check every in-scope host was attempted before time runs out"
     ]}
   ]
 }

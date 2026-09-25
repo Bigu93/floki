@@ -54,6 +54,8 @@ REF_TABLES = {
     "gtfobins": (("binary", "function", "command"), "binary"),
     "wordlists": (("name", "path", "use"), "name"),
     "modules": (("name", "protocol", "description"), "protocol"),
+    "lolbas": (("binary", "function", "command"), "binary"),
+    "nse": (("script", "category", "description"), "category"),
 }
 NO_SEARCH = {"ports": ("proto",)}  # proto is tcp/udp — matches everything, useless as a filter
 
