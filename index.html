@@ -476,7 +476,7 @@ async function loadTemplates() {
       items.forEach(t => {
         const wrap = document.createElement('div');
         wrap.className = 'titem';
-        wrap.dataset.s = `${t.name} ${t.type} ${t.template} ${group} ${category}`.toLowerCase();
+        wrap.dataset.s = `${t.name} ${t.type} ${t.template} ${group} ${category} ${t.notes || ''}`.toLowerCase();
         const b = document.createElement('button');
         b.type = 'button';
         b.setAttribute('aria-pressed', 'false');
@@ -491,7 +491,9 @@ async function loadTemplates() {
 }
 
 function filterTemplates(q) {
-  q = q.trim().toLowerCase();
+  // AND-tokenize: every whitespace-separated term must match (in any order),
+  // so "smb enum" and "shell reverse" work, not just contiguous substrings.
+  const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let anyHit = false;
   document.querySelectorAll('#tplList .grp').forEach(grp => {
     let grpVisible = 0;
@@ -499,7 +501,7 @@ function filterTemplates(q) {
       let catVisible = 0;
       let el = sc.nextElementSibling;
       while (el && el.classList.contains('titem')) {
-        const hit = !q || el.dataset.s.includes(q);
+        const hit = !terms.length || terms.every(t => el.dataset.s.includes(t));
         el.hidden = !hit;
         if (hit) { catVisible++; grpVisible++; }
         el = el.nextElementSibling;
@@ -507,13 +509,13 @@ function filterTemplates(q) {
       sc.hidden = catVisible === 0;
     });
     grp.hidden = grpVisible === 0;
-    if (q) grp.open = grpVisible > 0;
+    if (terms.length) grp.open = grpVisible > 0;
     if (grpVisible) anyHit = true;
   });
   let msg = $('#tplList .empty-msg');
   if (!anyHit) {
     if (!msg) { msg = document.createElement('div'); msg.className = 'empty-msg'; $('#tplList').appendChild(msg); }
-    msg.textContent = 'No templates match "' + q + '".'; msg.hidden = false;
+    msg.textContent = 'No templates match "' + q.trim() + '".'; msg.hidden = false;
   } else if (msg) { msg.hidden = true; }
 }
 $('#search').addEventListener('input', e => filterTemplates(e.target.value));
