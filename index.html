@@ -243,6 +243,30 @@
     .builder-body { padding: var(--s4); }
     .topbar { padding: var(--s3) var(--s4); }
   }
+
+  /* --- session globals strip (topbar) --- */
+  .gstrip { display: inline-flex; align-items: center; gap: var(--s3); flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--border-2); border-radius: 999px; padding: 4px 12px; font-family: var(--mono); font-size: .73rem; color: var(--muted); cursor: pointer; }
+  .gstrip:hover { border-color: var(--accent-line); }
+  .gstrip[hidden] { display: none; }
+  .gstrip .gk { color: var(--dim); }
+  .gstrip .gv { color: var(--accent-strong); }
+
+  /* --- auto-copy toggle --- */
+  .autocopy { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; color: var(--muted); cursor: pointer; user-select: none; }
+  .autocopy input { width: 13px; height: 13px; }
+
+  /* --- keyboard cursor on template list --- */
+  #tplList .titem.kbd > button { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  /* --- render history --- */
+  .dh-actions { display: inline-flex; gap: var(--s2); }
+  .hist-row { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; background: transparent; border: none; border-radius: var(--r1); padding: 7px 10px; cursor: pointer; color: var(--muted); font-family: var(--sans); }
+  .hist-row:hover { background: var(--surface-2); }
+  .hist-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .hist-row .hh { display: flex; justify-content: space-between; gap: 10px; font-size: .74rem; }
+  .hist-row .hh .hn { color: var(--ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-row .hh .ht { color: var(--dim); font-variant-numeric: tabular-nums; flex: none; }
+  .hist-row .hc { font-family: var(--mono); font-size: .76rem; color: var(--accent-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -253,6 +277,7 @@
   <header class="topbar">
     <h1 class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4-4 4"/><path d="M13 16h6"/></svg></span>Floki</h1>
     <p class="tagline">Payload &amp; command workbench — assembles and encodes text, never executes.</p>
+    <button type="button" id="globalStrip" class="gstrip" hidden aria-label="Current session globals — click to edit"></button>
     <span class="status"><span class="dot" aria-hidden="true"></span>127.0.0.1</span>
   </header>
 
@@ -290,6 +315,7 @@
           <div class="actions">
             <button type="submit" class="btn-primary">Render</button>
             <button type="button" id="copyBtn" class="btn-ghost" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
+            <label class="autocopy" title="Copy to clipboard automatically on Render"><input type="checkbox" id="autoCopy"> auto-copy</label>
           </div>
           <p class="msg" id="msg" role="status" aria-live="polite"></p>
         </form>
@@ -305,12 +331,18 @@
     <aside class="pane dock" aria-label="Reference and history">
       <div class="tabs" role="tablist" aria-label="Dock panels">
         <button type="button" class="tab" role="tab" id="tab-ref" aria-selected="true" aria-controls="panel-ref">Reference</button>
+        <button type="button" class="tab" role="tab" id="tab-hist" aria-selected="false" aria-controls="panel-hist" tabindex="-1">History</button>
         <button type="button" class="tab" role="tab" id="tab-method" aria-selected="false" aria-controls="panel-method" tabindex="-1">Methodology</button>
       </div>
       <div class="tabpanel" id="panel-ref" role="tabpanel" aria-labelledby="tab-ref">
         <p class="panel-hint">Quick-lookup tables — <b>click any row to copy</b>. Filter across ports, default creds, hashcat modes, GTFOBins, wordlist paths &amp; NetExec modules.</p>
         <div class="search-wrap"><input id="refSearch" type="search" placeholder="/ ports · creds · hashes · gtfobins · nxc -M" aria-label="Search reference data"></div>
         <div id="refResults" class="scroll" aria-live="polite"></div>
+      </div>
+      <div class="tabpanel" id="panel-hist" role="tabpanel" aria-labelledby="tab-hist" hidden>
+        <div class="dock-head"><span id="histCount">0 rendered</span><span class="dh-actions"><button type="button" id="exportHist" class="btn-ghost sm">export</button><button type="button" id="clearHist" class="btn-ghost sm">clear</button></span></div>
+        <p class="panel-hint">Every render this engagement — <b>click a row to re-copy</b>. Stored in your browser only.</p>
+        <div id="histList" class="scroll" aria-live="polite"></div>
       </div>
       <div class="tabpanel" id="panel-method" role="tabpanel" aria-labelledby="tab-method" hidden>
         <div class="dock-head"><span id="methodProgress">todo</span><button type="button" id="resetMethod" class="btn-ghost sm">reset</button></div>
@@ -370,9 +402,26 @@ function renderGlobals() {
       const gg = getGlobals();
       if (i.value) gg[i.dataset.global] = i.value; else delete gg[i.dataset.global];
       saveGlobals(gg);
+      renderStrip();
     });
   });
+  renderStrip();
 }
+
+// Always-visible readout of the globals that matter most for landing a shell.
+const STRIP_VARS = ['LHOST', 'LPORT', 'DOMAIN', 'DC_IP', 'USER'];
+function renderStrip() {
+  const strip = $('#globalStrip'); if (!strip) return;
+  const g = getGlobals();
+  const set = STRIP_VARS.filter(v => g[v]);
+  strip.hidden = set.length === 0;
+  strip.innerHTML = set.map(v => `<span class="gk">${v}</span> <span class="gv">${esc(g[v])}</span>`).join('&nbsp;·&nbsp;');
+}
+$('#globalStrip').addEventListener('click', () => {
+  const d = $('#globals'); d.open = true;
+  const first = d.querySelector('input'); if (first) first.focus();
+  d.scrollIntoView({ block: 'nearest' });
+});
 function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 function setMsg(text, kind) { const m = $('#msg'); m.textContent = text || ''; m.className = 'msg ' + (kind || ''); }
 
@@ -508,8 +557,15 @@ $('#genForm').addEventListener('submit', async e => {
     });
   } catch (err) { setMsg(err.message || 'render failed', 'err'); return; }
   showCommand(data);
-  setMsg('Rendered.', 'ok');
+  const tpl = templates.find(x => x.id === selected);
+  pushHistory(tpl ? tpl.name : selected, data.command);
+  if ($('#autoCopy').checked) { copyText(data.command); }
+  else { setMsg('Rendered.', 'ok'); }
 });
+
+// auto-copy preference persists per-browser
+try { $('#autoCopy').checked = localStorage.getItem('floki_autocopy') === '1'; } catch {}
+$('#autoCopy').addEventListener('change', e => { try { localStorage.setItem('floki_autocopy', e.target.checked ? '1' : '0'); } catch {} });
 
 function showCommand(data) {
   const cmd = $('#cmd');
@@ -613,6 +669,96 @@ async function loadReference(q) {
 }
 $('#refSearch').addEventListener('input', e => { clearTimeout(refTimer); const q = e.target.value; refTimer = setTimeout(() => loadReference(q), 120); });
 
+// --- render history (this-engagement log, per-browser) ---
+const HIST_KEY = 'floki_history', HIST_MAX = 300;
+function loadHist() { try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; } }
+function saveHist(h) { try { localStorage.setItem(HIST_KEY, JSON.stringify(h)); } catch {} }
+function pushHistory(name, command) {
+  const h = loadHist();
+  h.unshift({ t: Date.now(), name, command });
+  saveHist(h.slice(0, HIST_MAX));
+  renderHistory();
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+function renderHistory() {
+  const box = $('#histList'); if (!box) return;
+  const h = loadHist();
+  $('#histCount').textContent = h.length + ' rendered';
+  box.innerHTML = '';
+  if (!h.length) { box.innerHTML = '<div class="empty-msg">No renders yet. Each command you render lands here.</div>'; return; }
+  h.forEach(item => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'hist-row'; b.title = 'Copy: ' + item.command;
+    b.innerHTML = `<span class="hh"><span class="hn">${esc(item.name)}</span><span class="ht">${esc(fmtTime(item.t))}</span></span>` +
+      `<span class="hc">${esc(item.command)}</span>`;
+    b.onclick = () => copyText(item.command);
+    box.appendChild(b);
+  });
+}
+$('#clearHist').addEventListener('click', () => {
+  if (!loadHist().length || confirm('Clear the render history for this browser?')) {
+    try { localStorage.removeItem(HIST_KEY); } catch {} renderHistory();
+  }
+});
+$('#exportHist').addEventListener('click', () => {
+  const h = loadHist();
+  if (!h.length) { setMsg('Nothing to export yet.', 'err'); return; }
+  const lines = h.slice().reverse().map(i => `# ${fmtTime(i.t)}  ${i.name}\n${i.command}`);
+  const blob = new Blob([lines.join('\n\n') + '\n'], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'floki-history-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '') + '.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+// --- keyboard-first flow ---
+function typingTarget(el) {
+  return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+}
+function visibleItems() {
+  return [...document.querySelectorAll('#tplList .titem')].filter(el => !el.hidden && el.offsetParent !== null);
+}
+let kbdIndex = -1;
+function moveCursor(delta) {
+  const items = visibleItems();
+  if (!items.length) return;
+  document.querySelectorAll('#tplList .titem.kbd').forEach(el => el.classList.remove('kbd'));
+  kbdIndex = Math.max(0, Math.min(items.length - 1, (kbdIndex < 0 ? (delta > 0 ? -1 : 0) : kbdIndex) + delta));
+  const cur = items[kbdIndex];
+  cur.classList.add('kbd');
+  cur.scrollIntoView({ block: 'nearest' });
+}
+document.addEventListener('keydown', e => {
+  // "/" focuses the template filter (unless already typing)
+  if (e.key === '/' && !typingTarget(document.activeElement)) {
+    e.preventDefault(); $('#search').focus(); $('#search').select(); return;
+  }
+  // Ctrl/Cmd+Enter renders from anywhere
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault(); $('#genForm').requestSubmit(); return;
+  }
+  // Arrow navigation of the template list from the search box or the list itself
+  const inSearch = document.activeElement === $('#search');
+  const inList = $('#tplList').contains(document.activeElement);
+  if ((inSearch || inList) && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault(); moveCursor(e.key === 'ArrowDown' ? 1 : -1); return;
+  }
+  if (inSearch && e.key === 'Enter') {
+    const items = visibleItems();
+    const target = items[kbdIndex] || items[0];
+    if (target) { e.preventDefault(); target.querySelector('button').click(); }
+  }
+});
+// filtering invalidates the cursor
+$('#search').addEventListener('input', () => {
+  kbdIndex = -1;
+  document.querySelectorAll('#tplList .titem.kbd').forEach(el => el.classList.remove('kbd'));
+});
+
 // dock tabs
 const tabs = [...document.querySelectorAll('.tab')];
 function selectTab(tab) {
@@ -638,6 +784,7 @@ renderGlobals();
 loadTemplates();
 loadReference('');
 loadMethodology();
+renderHistory();
 </script>
 </body>
 </html>
