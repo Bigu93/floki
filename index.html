@@ -261,6 +261,16 @@
   .autocopy { display: inline-flex; align-items: center; gap: 7px; font-size: .78rem; color: var(--muted); cursor: pointer; user-select: none; }
   .autocopy input { width: 13px; height: 13px; }
 
+  /* --- copy feedback: button flash + toast --- */
+  .btn-ghost.copied { border-color: var(--accent-line); color: var(--accent-strong); background: var(--accent-tint); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 12px); z-index: 50;
+    display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px;
+    background: var(--surface-3); border: 1px solid var(--accent-line); color: var(--ink);
+    font-size: .82rem; font-weight: 550; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .16s ease; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.err { border-color: var(--danger); color: var(--danger); }
+
   /* --- keyboard cursor on template list --- */
   #tplList .titem.kbd > button { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -280,6 +290,7 @@
 </head>
 <body>
 <div class="app">
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <header class="topbar">
     <h1 class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4-4 4"/><path d="M13 16h6"/></svg></span>Floki</h1>
     <p class="tagline">Payload &amp; command workbench — assembles and encodes text, never executes.</p>
@@ -308,7 +319,7 @@
         </details>
         <div id="selName" class="sel-name placeholder">Pick a template from the list to build a command.</div>
         <p class="notes" id="selNotes"></p>
-        <form id="genForm" autocomplete="off">
+        <form id="genForm" autocomplete="off" hidden>
           <div id="varFields" class="var-grid"></div>
           <div id="optWrap" class="opt-wrap" hidden>
             <div class="section-label">Flags <span class="muted-note">— toggle to append</span></div>
@@ -325,7 +336,7 @@
           </div>
           <p class="msg" id="msg" role="status" aria-live="polite"></p>
         </form>
-        <div class="output-wrap">
+        <div class="output-wrap" id="outputWrap" hidden>
           <div class="output-label">Output</div>
           <div id="cmd" class="output empty" aria-live="polite">Rendered command will appear here.</div>
           <p class="notes" id="notes"></p>
@@ -512,6 +523,8 @@ function selectTpl(id, btn) {
   document.querySelectorAll('#tplList button').forEach(x => x.setAttribute('aria-pressed', 'false'));
   btn.setAttribute('aria-pressed', 'true');
   const t = templates.find(x => x.id === id);
+  $('#genForm').hidden = false;
+  $('#outputWrap').hidden = false;
   $('#selName').textContent = t.name;
   $('#selName').classList.remove('placeholder');
   $('#selNotes').textContent = t.notes || '';
@@ -565,7 +578,7 @@ $('#genForm').addEventListener('submit', async e => {
   showCommand(data);
   const tpl = templates.find(x => x.id === selected);
   pushHistory(tpl ? tpl.name : selected, data.command);
-  if ($('#autoCopy').checked) { copyText(data.command); }
+  if ($('#autoCopy').checked) { copyText(data.command, { flash: true }); setMsg('Rendered & copied.', 'ok'); }
   else { setMsg('Rendered.', 'ok'); }
 });
 
@@ -583,17 +596,38 @@ function showCommand(data) {
   $('#copyBtn').disabled = false;
   $('#copyBtn').dataset.cmd = data.command;
 }
-$('#copyBtn').addEventListener('click', () => copyText($('#copyBtn').dataset.cmd));
+$('#copyBtn').addEventListener('click', () => copyText($('#copyBtn').dataset.cmd, { flash: true }));
 
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); setMsg('Copied to clipboard.', 'ok'); }
+let toastTimer;
+function toast(text, kind) {
+  const t = $('#toast'); if (!t) return;
+  t.textContent = text;
+  t.className = 'toast show' + (kind ? ' ' + kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 1600);
+}
+// Briefly swap the Copy button label to a checkmark for tactile feedback.
+function flashCopyBtn() {
+  const btn = $('#copyBtn'); if (!btn || btn.disabled) return;
+  if (btn.dataset.flashing) return;
+  const orig = btn.innerHTML;
+  btn.dataset.flashing = '1';
+  btn.classList.add('copied');
+  btn.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Copied';
+  setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); delete btn.dataset.flashing; }, 1200);
+}
+async function copyText(text, opts) {
+  let ok = true;
+  try { await navigator.clipboard.writeText(text); }
   catch {
     const ta = document.createElement('textarea');
     ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); setMsg('Copied.', 'ok'); }
-    catch { setMsg('Copy failed — select and copy manually.', 'err'); }
+    try { document.execCommand('copy'); } catch { ok = false; }
     ta.remove();
   }
+  if (ok) { toast('Copied to clipboard', 'ok'); if (opts && opts.flash) flashCopyBtn(); }
+  else { toast('Copy failed — select manually', 'err'); setMsg('Copy failed — select and copy manually.', 'err'); }
+  return ok;
 }
 
 // --- methodology checklist (check state + notes persist per-browser) ---
