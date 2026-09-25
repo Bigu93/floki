@@ -31,6 +31,16 @@ DB_FILE = HERE / "floki.db"
 
 MAX_BODY = 64 * 1024  # cap on POST body size; the tool only ever gets small JSON
 
+# The brand mark (same glyph as the UI header), served so the browser's
+# automatic /favicon.ico request doesn't 404. Rounded-square accent background.
+FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<rect width="32" height="32" rx="8" fill="#0f1217"/>'
+    '<g fill="none" stroke="#46b8c6" stroke-width="2.4" '
+    'stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M9 10l5 6-5 6"/><path d="M18 22h6"/></g></svg>'
+).encode("utf-8")
+
 # The runtime store is floki.db, rebuilt on startup from the editable seed files.
 # `options` holds each template's toggleable flags (JSON list, stored as text).
 TEMPLATE_COLS = ("id", "group", "category", "name", "type", "encoding", "template", "notes", "options")
@@ -246,6 +256,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(200, INDEX_FILE.read_bytes(), "text/html; charset=utf-8")
+        elif self.path in ("/favicon.ico", "/favicon.svg"):
+            self._send(200, FAVICON_SVG, "image/svg+xml")
         elif self.path == "/api/templates":
             self._json(200, load_templates())
         elif self.path == "/api/methodology":
