@@ -237,10 +237,15 @@
   }
   @media (max-width: 1180px) {
     .workbench { grid-template-columns: 260px minmax(0,1fr); grid-template-areas: "rail builder" "rail dock"; }
+    /* Builder is a top-to-bottom form: let it flow so Render + Output are never
+       trapped below the fold of a nested scroll box — the page scrolls instead.
+       (.builder-body.scroll wins over the base .scroll cap at any width here.) */
+    .builder-body.scroll { max-height: none; overflow: visible; }
   }
   @media (max-width: 820px) {
     .workbench { grid-template-columns: 1fr; grid-template-areas: "rail" "builder" "dock"; padding: var(--s2); gap: var(--s2); }
-    .scroll { max-height: 52vh; }
+    /* Cap only the scannable lists on mobile, not the builder form. */
+    #tplList, #refResults, #histList, #methodList { max-height: 52vh; }
     .builder-body { padding: var(--s4); }
     .topbar { padding: var(--s3) var(--s4); }
   }
