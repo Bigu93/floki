@@ -438,6 +438,17 @@ const VAR_META = {
   FILE:   {ph: 'filename'},
   IFACE:  {ph: 'tun0 / eth0'},
   WORDLIST: {ph: '/usr/share/wordlists/rockyou.txt'},
+  TARGET_USER: {ph: 'user to impersonate / target (Administrator)'},
+  SPN:      {ph: 'service SPN (cifs/host, MSSQLSvc/…)'},
+  AESKEY:   {ph: 'AES256 key (from secretsdump)', secret: true},
+  NEWPASS:  {ph: 'new password to set'},
+  COMPUTER: {ph: 'target computer (HOST$ / HOST)'},
+  CA:       {ph: 'CA name (from certipy find)'},
+  TEMPLATE: {ph: 'cert template name'},
+  GROUP:    {ph: 'group name (Domain Admins)'},
+  BASEDN:   {ph: 'DC=corp,DC=local'},
+  SID:      {ph: 'domain SID (S-1-5-21-…)'},
+  TICKET:   {ph: 'ticket file (without .ccache)'},
 };
 const VAR_RE = /\{([A-Z_]+)\}/g;
 function varsOf(t) { return [...new Set([...t.template.matchAll(VAR_RE)].map(m => m[1]))]; }
