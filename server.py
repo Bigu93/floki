@@ -6,10 +6,15 @@ template's encoding, and serves a single-page UI on localhost. It only formats
 and copies text: it never executes a payload and makes no outbound calls.
 
 Run:  python3 server.py [port]   (default 127.0.0.1:8000)
+
+Bind host/port can also be set with the FLOKI_HOST / FLOKI_PORT environment
+variables (used by the container image, which binds 0.0.0.0 so the port can be
+published). A CLI port argument overrides FLOKI_PORT.
 """
 import base64
 import ipaddress
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -285,10 +290,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    host = os.environ.get("FLOKI_HOST", "127.0.0.1")
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("FLOKI_PORT", 8000))
     build_db()
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"Floki running at http://127.0.0.1:{port}  (Ctrl-C to stop)")
+    httpd = ThreadingHTTPServer((host, port), Handler)
+    shown = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    print(f"Floki running at http://{shown}:{port}  (Ctrl-C to stop)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

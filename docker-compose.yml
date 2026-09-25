@@ -1,0 +1,15 @@
+# Portainer: Stacks -> Add stack -> paste this (or point it at the repo).
+services:
+  floki:
+    build: .
+    # Or use a prebuilt image instead of build:
+    # image: ghcr.io/bigu93/floki:latest
+    container_name: floki
+    ports:
+      - "8000:8000"        # host:container — change the host port as needed
+    restart: unless-stopped
+    # Edit templates live by mounting the seed files (floki.db rebuilds on restart):
+    # volumes:
+    #   - ./templates.json:/app/templates.json:ro
+    #   - ./reference_seed.json:/app/reference_seed.json:ro
+    #   - ./methodology.json:/app/methodology.json:ro

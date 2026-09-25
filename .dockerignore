@@ -1,0 +1,7 @@
+.git
+.gitignore
+floki.db
+reference/
+test_floki.py
+*.md
+LICENSE
