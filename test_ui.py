@@ -250,6 +250,9 @@ BROWSER_TESTS = r"""
       }
 
       // (7) target stage toggle keeps keyboard focus (no list rebuild)
+      $('#tab-targets').click();
+      await tick();
+      ck('target-tab-reveals-panel', $('#panel-targets').hidden === false);
       $('#tgName').value = 'box01';
       $('#tgIp').value = '10.0.0.9';
       $('#tgPts').value = '10';
