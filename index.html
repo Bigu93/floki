@@ -196,6 +196,14 @@
   .badge { font-size: .7rem; font-family: var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-2); color: var(--muted); }
   .badge.enc { color: var(--accent); border-color: var(--accent-line); }
 
+  /* visible, always-in-view status/error surfaces (loading · error · retry) */
+  .status-bar { display: flex; align-items: center; gap: var(--s2); margin: 0 var(--s4) var(--s3); padding: 8px 11px; border: 1px solid var(--border-2); border-radius: var(--r1); background: var(--surface-2); color: var(--muted); font-size: .78rem; line-height: 1.4; }
+  .status-bar[hidden] { display: none; }
+  .status-bar.err { color: var(--danger); border-color: rgba(229,104,111,.45); }
+  .status-bar .retry { margin-left: auto; flex: none; }
+  .back-btn { display: none; }
+  @media (max-width: 820px) { .back-btn[data-show="1"] { display: inline-flex; } }
+
   .output-wrap { margin-top: var(--s5); }
   .output-label { font-size: .72rem; font-weight: 600; color: var(--muted); margin-bottom: var(--s2); }
   .output {
@@ -204,6 +212,7 @@
     color: var(--ink); line-height: 1.6;
   }
   .output.empty { color: var(--dim); }
+  .output.stale { color: var(--dim); border-style: dashed; }
 
   /* --- dock tabs --- */
   .tabs { display: flex; gap: var(--s1); padding: var(--s3) var(--s3) 0; border-bottom: 1px solid var(--border); flex: none; }
@@ -357,12 +366,14 @@
         <button type="button" data-axis="tool" aria-pressed="false">Tool</button>
         <button type="button" data-axis="platform" aria-pressed="false">Platform</button>
       </div>
+      <div id="tplStatus" class="status-bar" role="status" aria-live="polite" hidden></div>
       <div id="tplList" class="scroll"></div>
     </nav>
 
     <!-- BUILDER -->
     <section class="pane builder" aria-labelledby="builderH">
       <div class="pane-head">
+        <button type="button" id="backToTpl" class="btn-ghost sm back-btn" hidden aria-label="Back to templates">&#8592; Templates</button>
         <h2 id="builderH">Builder</h2>
         <div class="badges" id="meta" hidden><span class="badge" id="bType"></span><span class="badge enc" id="bEnc"></span></div>
       </div>
@@ -388,8 +399,8 @@
             <button type="button" id="copyBtn" class="btn-ghost" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
             <label class="autocopy" title="Copy to clipboard automatically on Render"><input type="checkbox" id="autoCopy"> auto-copy</label>
           </div>
-          <p class="msg" id="msg" role="status" aria-live="polite"></p>
         </form>
+        <p class="msg" id="msg" role="status" aria-live="polite"></p>
         <div class="output-wrap" id="outputWrap" hidden>
           <div class="output-label">Output</div>
           <div id="cmd" class="output empty" aria-live="polite">Rendered command will appear here.</div>
@@ -409,6 +420,7 @@
       <div class="tabpanel" id="panel-ref" role="tabpanel" aria-labelledby="tab-ref">
         <p class="panel-hint">Quick-lookup tables — <b>click any row to copy</b>. Filter across ports, default creds, hashcat modes, GTFOBins, wordlist paths &amp; NetExec modules.</p>
         <div class="search-wrap"><input id="refSearch" type="search" placeholder="/ ports · creds · hashes · gtfobins · lolbas · nse · nxc -M" aria-label="Search reference data"></div>
+        <div id="refStatus" class="status-bar" role="status" aria-live="polite" hidden></div>
         <div id="refResults" class="scroll" aria-live="polite"></div>
       </div>
       <div class="tabpanel" id="panel-targets" role="tabpanel" aria-labelledby="tab-targets" hidden>
@@ -429,6 +441,7 @@
       </div>
       <div class="tabpanel" id="panel-method" role="tabpanel" aria-labelledby="tab-method" hidden>
         <div class="dock-head"><span id="methodProgress">todo</span><button type="button" id="resetMethod" class="btn-ghost sm">reset</button></div>
+        <div id="methodStatus" class="status-bar" role="status" aria-live="polite" hidden></div>
         <div id="methodList" class="scroll"></div>
         <div class="have-wrap">
           <label for="haveNotes" class="output-label">what you have — creds · hosts · flags</label>
@@ -440,8 +453,82 @@
 </div>
 
 <script>
+/* FLOKI-CORE-START */
+// Pure, DOM-injectable helpers. index.html's live UI uses these directly, and
+// test_ui.js/test_ui.py load exactly this block to exercise the real logic
+// under Node or headless Chrome (no build step, no dependencies).
+function createRenderGuard() {
+  let token = 0;
+  return {
+    // bump() invalidates queued work and mints the token the next response must match
+    bump() { token += 1; return token; },
+    isCurrent(requestToken) { return requestToken === token; },
+    token() { return token; }
+  };
+}
+// Build a labelled <input> using DOM property assignment for arbitrary values,
+// so values containing quotes/tags (e.g. p"w) round-trip unchanged and can never
+// break out of an attribute.
+function buildField(doc, opts) {
+  const field = doc.createElement('div');
+  field.className = 'field';
+  const label = doc.createElement('label');
+  label.setAttribute('for', opts.id);
+  label.textContent = opts.label;
+  const input = doc.createElement('input');
+  input.type = 'text';
+  input.id = opts.id;
+  input.setAttribute(opts.dataName, opts.dataValue);
+  if (opts.numeric) input.setAttribute('inputmode', 'numeric');
+  if (opts.secret) input.setAttribute('autocomplete', 'off');
+  input.placeholder = opts.placeholder == null ? '' : opts.placeholder;
+  input.value = opts.value == null ? '' : opts.value;
+  field.appendChild(label);
+  field.appendChild(input);
+  return field;
+}
+function buildOptionChip(doc, flag) {
+  const lab = doc.createElement('label');
+  lab.className = 'opt-chip';
+  const input = doc.createElement('input');
+  input.type = 'checkbox';
+  input.setAttribute('data-opt', '');
+  input.value = flag;
+  const span = doc.createElement('span');
+  span.textContent = flag;
+  lab.appendChild(input);
+  lab.appendChild(span);
+  return lab;
+}
+// Truthful copy result: a fallback that returned false is a failure, not success.
+function copyOutcome(clipboardOk, execReturned) {
+  if (clipboardOk) return 'ok';
+  return execReturned === true ? 'ok' : 'manual';
+}
+// Distinguish a real fetch failure from an empty-but-successful result set.
+function classifyFetchOutcome(ok, count) {
+  if (!ok) return 'error';
+  return count > 0 ? 'data' : 'empty';
+}
+// Mobile: navigate to the builder without forcing the soft keyboard open.
+function mobileSelectAction(isMobileViewport) {
+  return isMobileViewport ? 'scroll' : 'focus';
+}
+function scrollBehavior(reducedMotion) {
+  return reducedMotion ? 'auto' : 'smooth';
+}
+// Update a target's stage in place; return whether the card is now complete.
+function nextTargetDone(target, stage, checked) {
+  target[stage] = checked;
+  return !!(target.root && target.proof);
+}
+/* FLOKI-CORE-END */
+
 const $ = s => document.querySelector(s);
 let templates = [], selected = null;
+const renderGuard = createRenderGuard();
+let hasOutput = false;
+let rendering = false;
 
 const VAR_META = {
   LHOST:  {ph: '10.10.14.7 (your listener)'},
@@ -483,13 +570,10 @@ function renderGlobals() {
   const box = $('#globalFields'); box.innerHTML = '';
   GLOBAL_VARS.forEach(v => {
     const meta = VAR_META[v] || { ph: v.toLowerCase() };
-    const field = document.createElement('div');
-    field.className = 'field';
-    field.innerHTML =
-      `<label for="g-${v}">${v}</label>` +
-      `<input type="text" id="g-${v}" data-global="${v}"${meta.numeric ? ' inputmode="numeric"' : ''}` +
-      `${meta.secret ? ' autocomplete="off"' : ''} placeholder="${esc(meta.ph)}" value="${esc(g[v] || '')}">`;
-    box.appendChild(field);
+    box.appendChild(buildField(document, {
+      id: 'g-' + v, label: v, dataName: 'data-global', dataValue: v,
+      numeric: meta.numeric, secret: meta.secret, placeholder: meta.ph, value: g[v] || ''
+    }));
   });
   box.querySelectorAll('input[data-global]').forEach(i => {
     i.addEventListener('input', () => {
@@ -522,8 +606,46 @@ $('#globalStrip').addEventListener('click', () => {
   const first = d.querySelector('input'); if (first) first.focus();
   d.scrollIntoView({ block: 'nearest' });
 });
-function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  // textContent escapes < > & but not quotes; harden so esc() is also safe when
+  // interpolated into markup (defence in depth — live values use DOM properties).
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 function setMsg(text, kind) { const m = $('#msg'); m.textContent = text || ''; m.className = 'msg ' + (kind || ''); }
+// Visible loading/error line (with an optional working Retry) in a status bar.
+function setStatus(el, kind, text, retryFn) {
+  if (!el) return;
+  el.className = 'status-bar' + (kind ? ' ' + kind : '');
+  el.textContent = '';
+  if (text) { const s = document.createElement('span'); s.textContent = text; el.appendChild(s); }
+  if (retryFn) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn-ghost sm retry'; b.textContent = 'Retry';
+    b.addEventListener('click', () => { setStatus(el, '', '', null); retryFn(); });
+    el.appendChild(b);
+  }
+  el.hidden = !text;
+}
+// Clear the rendered command + copy metadata so nothing stale stays copyable.
+function resetOutput() {
+  hasOutput = false;
+  const cmd = $('#cmd');
+  if (cmd) { cmd.textContent = 'Rendered command will appear here.'; cmd.className = 'output empty'; }
+  const meta = $('#meta'); if (meta) meta.hidden = true;
+  const btn = $('#copyBtn'); if (btn) { btn.disabled = true; btn.classList.remove('copied'); delete btn.dataset.cmd; delete btn.dataset.flashing; }
+  const notes = $('#notes'); if (notes) notes.textContent = '';
+}
+// Inputs changed: invalidate any in-flight render; if a command is shown keep it
+// as a preview but block Copy and prompt the user to render again.
+function markStale() {
+  renderGuard.bump();
+  if (!hasOutput && !rendering) return;
+  const btn = $('#copyBtn'); if (btn) btn.disabled = true;
+  const cmd = $('#cmd'); if (cmd) cmd.classList.add('stale');
+  setMsg('Inputs changed — render again to refresh.', '');
+}
 
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
@@ -572,8 +694,19 @@ const AXES = {
 let currentAxis = 'group';
 
 async function loadTemplates() {
-  try { templates = await fetchJSON('/api/templates'); }
-  catch (err) { setMsg('Could not load templates: ' + err.message, 'err'); return; }
+  const statusEl = $('#tplStatus'), list = $('#tplList');
+  setStatus(statusEl, 'loading', 'Loading templates…', null);
+  if (list) list.setAttribute('aria-busy', 'true');
+  try {
+    templates = await fetchJSON('/api/templates');
+  } catch (err) {
+    if (list) list.removeAttribute('aria-busy');
+    // visible even before a template is chosen (the old #msg lived in a hidden form)
+    setStatus(statusEl, 'err', 'Could not load templates: ' + err.message, loadTemplates);
+    return;
+  }
+  if (list) list.removeAttribute('aria-busy');
+  setStatus(statusEl, '', '', null);
   $('#tplCount').textContent = templates.length;
   renderTree(currentAxis);
 }
@@ -676,11 +809,14 @@ $('#search').addEventListener('input', e => filterTemplates(e.target.value));
 
 function selectTpl(id, btn) {
   selected = id;
+  // a template change invalidates any in-flight render and clears stale output
+  renderGuard.bump();
   document.querySelectorAll('#tplList button').forEach(x => x.setAttribute('aria-pressed', 'false'));
   btn.setAttribute('aria-pressed', 'true');
   const t = templates.find(x => x.id === id);
   $('#genForm').hidden = false;
   $('#outputWrap').hidden = false;
+  resetOutput();
   $('#selName').textContent = t.name;
   $('#selName').classList.remove('placeholder');
   $('#selNotes').textContent = t.notes || '';
@@ -693,28 +829,30 @@ function selectTpl(id, btn) {
   vars.forEach(v => {
     const meta = VAR_META[v] || {ph: v.toLowerCase()};
     const val = (globals[v] != null && globals[v] !== '') ? globals[v] : (meta.def || '');
-    const field = document.createElement('div');
-    field.className = 'field';
-    field.innerHTML =
-      `<label for="var-${v}">${v}</label>` +
-      `<input type="text" id="var-${v}" data-var="${v}"${meta.numeric ? ' inputmode="numeric"' : ''}` +
-      `${meta.secret ? ' autocomplete="off"' : ''} placeholder="${esc(meta.ph)}" value="${esc(val)}">`;
-    box.appendChild(field);
+    box.appendChild(buildField(document, {
+      id: 'var-' + v, label: v, dataName: 'data-var', dataValue: v,
+      numeric: meta.numeric, secret: meta.secret, placeholder: meta.ph, value: val
+    }));
   });
   // toggleable flags
   const optWrap = $('#optWrap'), optBox = $('#optFields'); optBox.innerHTML = '';
   const opts = t.options || [];
   optWrap.hidden = opts.length === 0;
-  opts.forEach(flag => {
-    const lab = document.createElement('label');
-    lab.className = 'opt-chip';
-    lab.innerHTML = `<input type="checkbox" data-opt value="${esc(flag)}"><span>${esc(flag)}</span>`;
-    optBox.appendChild(lab);
-  });
+  opts.forEach(flag => optBox.appendChild(buildOptionChip(document, flag)));
+  // edits invalidate the displayed output (disable Copy, prompt a re-render)
+  box.querySelectorAll('input[data-var]').forEach(i => i.addEventListener('input', markStale));
+  optBox.querySelectorAll('input[data-opt]').forEach(i => i.addEventListener('change', markStale));
   $('#extraArgs').value = '';
-  setMsg('', '');
+  setMsg('');
   const firstInput = box.querySelector('input');
-  if (firstInput) firstInput.focus();
+  if (mobileSelectAction(isMobileViewport()) === 'scroll') {
+    // mobile: surface the builder but keep the soft keyboard closed
+    const back = $('#backToTpl'); if (back) { back.dataset.show = '1'; back.hidden = false; }
+    const builder = document.querySelector('.builder');
+    if (builder) builder.scrollIntoView({ behavior: scrollBehavior(prefersReducedMotion()), block: 'start' });
+  } else if (firstInput) {
+    firstInput.focus();
+  }
 }
 
 $('#genForm').addEventListener('submit', async e => {
@@ -724,18 +862,40 @@ $('#genForm').addEventListener('submit', async e => {
   document.querySelectorAll('#varFields input[data-var]').forEach(i => { vars[i.dataset.var] = i.value; });
   const options = [...document.querySelectorAll('#optFields input[data-opt]:checked')].map(i => i.value);
   const extra = $('#extraArgs').value;
+  // claim a token; if inputs/template change while this render is in flight the
+  // response is discarded instead of overwriting the (now different) output.
+  const token = renderGuard.bump();
+  resetOutput();
+  const wrap = $('#outputWrap'); if (wrap) wrap.setAttribute('aria-busy', 'true');
+  setMsg('Rendering…', '');
+  rendering = true;
   let data;
   try {
     data = await fetchJSON('/api/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ template_id: selected, vars, options, extra }),
     });
-  } catch (err) { setMsg(err.message || 'render failed', 'err'); return; }
+  } catch (err) {
+    rendering = false;
+    if (wrap) wrap.removeAttribute('aria-busy');
+    if (!renderGuard.isCurrent(token)) return;
+    resetOutput();
+    setMsg(err.message || 'render failed', 'err');
+    return;
+  }
+  rendering = false;
+  if (wrap) wrap.removeAttribute('aria-busy');
+  if (!renderGuard.isCurrent(token)) return;
   showCommand(data);
   const tpl = templates.find(x => x.id === selected);
   pushHistory(tpl ? tpl.name : selected, data.command);
-  if ($('#autoCopy').checked) { copyText(data.command, { flash: true }); setMsg('Rendered & copied.', 'ok'); }
-  else { setMsg('Rendered.', 'ok'); }
+  if ($('#autoCopy').checked) {
+    const ok = await copyText(data.command, { flash: true });
+    if (!renderGuard.isCurrent(token)) return;
+    setMsg(ok ? 'Rendered & copied.' : 'Rendered — auto-copy failed; copy manually.', ok ? 'ok' : 'err');
+  } else {
+    setMsg('Rendered.', 'ok');
+  }
 });
 
 // auto-copy preference persists per-browser
@@ -744,13 +904,15 @@ $('#autoCopy').addEventListener('change', e => { try { localStorage.setItem('flo
 
 function showCommand(data) {
   const cmd = $('#cmd');
-  cmd.textContent = data.command; cmd.classList.remove('empty');
+  cmd.textContent = data.command; cmd.classList.remove('empty', 'stale');
+  $('#outputWrap').hidden = false;
   $('#meta').hidden = false;
   $('#bType').textContent = data.type;
   $('#bEnc').textContent = 'enc: ' + data.encoding;
   $('#notes').textContent = data.notes || '';
   $('#copyBtn').disabled = false;
   $('#copyBtn').dataset.cmd = data.command;
+  hasOutput = true;
 }
 $('#copyBtn').addEventListener('click', () => copyText($('#copyBtn').dataset.cmd, { flash: true }));
 
@@ -772,18 +934,51 @@ function flashCopyBtn() {
   btn.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>Copied';
   setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied'); delete btn.dataset.flashing; }, 1200);
 }
+// Select the rendered command so a failed clipboard copy can be recovered by
+// hand, keeping focus on Copy for keyboard users.
+function selectOutputForManualCopy() {
+  const cmd = $('#cmd');
+  if (!hasOutput || !cmd) return;
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(cmd);
+    const sel = window.getSelection();
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+  } catch {}
+  const btn = $('#copyBtn'); if (btn) { try { btn.focus(); } catch {} }
+}
 async function copyText(text, opts) {
-  let ok = true;
-  try { await navigator.clipboard.writeText(text); }
-  catch {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); } catch { ok = false; }
-    ta.remove();
+  let clipboardOk = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try { await navigator.clipboard.writeText(text); clipboardOk = true; }
+    catch { clipboardOk = false; }
   }
-  if (ok) { toast('Copied to clipboard', 'ok'); if (opts && opts.flash) flashCopyBtn(); }
-  else { toast('Copy failed — select manually', 'err'); setMsg('Copy failed — select and copy manually.', 'err'); }
-  return ok;
+  let execReturned = false;
+  if (!clipboardOk) {
+    const prevFocus = document.activeElement;
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { execReturned = document.execCommand('copy') === true; } catch { execReturned = false; }
+    ta.remove();
+    // restore keyboard focus stolen by the temporary textarea
+    if (prevFocus && typeof prevFocus.focus === 'function') { try { prevFocus.focus(); } catch {} }
+  }
+  const outcome = copyOutcome(clipboardOk, execReturned);
+  if (outcome === 'ok') {
+    toast('Copied to clipboard', 'ok');
+    if (opts && opts.flash) flashCopyBtn();
+  } else {
+    toast('Copy failed — select and copy manually', 'err');
+    setMsg('Copy failed — select the command and copy it manually.', 'err');
+    selectOutputForManualCopy();
+  }
+  return outcome === 'ok';
 }
 
 // --- methodology checklist (check state + notes persist per-browser) ---
@@ -793,10 +988,19 @@ function saveDone(d) { try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); 
 
 async function loadMethodology() {
   let data;
+  const statusEl = $('#methodStatus'), box = $('#methodList');
+  if (box) box.setAttribute('aria-busy', 'true');
   try { data = await fetchJSON('/api/methodology'); }
-  catch { data = { phases: [] }; }
+  catch (err) {
+    if (box) { box.removeAttribute('aria-busy'); box.innerHTML = ''; }
+    setStatus(statusEl, 'err', 'Could not load methodology: ' + err.message, loadMethodology);
+    updateProgress();
+    return;
+  }
+  if (box) box.removeAttribute('aria-busy');
+  setStatus(statusEl, '', '', null);
   const done = loadDone();
-  const box = $('#methodList'); box.innerHTML = '';
+  box.innerHTML = '';
   (data.phases || []).forEach(ph => {
     const h = document.createElement('div'); h.className = 'method-phase'; h.textContent = ph.phase;
     box.appendChild(h);
@@ -842,9 +1046,18 @@ const REF_RENDER = {
 let refTimer;
 async function loadReference(q) {
   let data;
+  const statusEl = $('#refStatus'), box = $('#refResults');
+  if (box) box.setAttribute('aria-busy', 'true');
+  if (!q) setStatus(statusEl, 'loading', 'Loading reference…', null);
   try { data = await fetchJSON('/api/reference?q=' + encodeURIComponent(q || '')); }
-  catch { data = {}; }
-  const box = $('#refResults'); box.innerHTML = '';
+  catch (err) {
+    if (box) { box.removeAttribute('aria-busy'); box.innerHTML = ''; }
+    setStatus(statusEl, 'err', 'Could not load reference data: ' + err.message, () => loadReference(q));
+    return;
+  }
+  if (box) box.removeAttribute('aria-busy');
+  setStatus(statusEl, '', '', null);
+  box.innerHTML = '';
   let total = 0;
   Object.keys(REF_RENDER).forEach(table => {
     const rows = data[table] || [];
@@ -932,21 +1145,28 @@ function activateTarget(t) {
   renderGlobals();  // refresh Session Globals inputs + topbar strip
   // sync matching fields in the currently open builder template, without disturbing others
   ['TARGET', 'RHOST'].concat(t.dc ? ['DC_IP'] : []).forEach(v => { const el = $('#var-' + v); if (el) el.value = t.ip; });
+  // pushing a box's IP changes builder inputs → any shown output is now stale
+  renderGuard.bump();
+  markStale();
   renderTargets();
   toast('Active target: ' + (t.name || t.ip));
+}
+function computeTargetSummary(arr) {
+  const total = arr.reduce((n, t) => n + (+t.points || 0), 0);
+  const earned = arr.reduce((n, t) => n + (t.proof ? (+t.points || 0) : 0), 0);
+  const rooted = arr.filter(t => t.root).length;
+  return `${earned} / ${total} pts · ${rooted}/${arr.length} rooted`;
 }
 function renderTargets() {
   const arr = loadTargets();
   const actId = getActive();
-  const total = arr.reduce((n, t) => n + (+t.points || 0), 0);
-  const earned = arr.reduce((n, t) => n + (t.proof ? (+t.points || 0) : 0), 0);
-  const rooted = arr.filter(t => t.root).length;
-  $('#targetSummary').textContent = `${earned} / ${total} pts · ${rooted}/${arr.length} rooted`;
+  $('#targetSummary').textContent = computeTargetSummary(arr);
   const list = $('#targetList'); list.innerHTML = '';
   if (!arr.length) { list.innerHTML = '<div class="empty-msg">No targets yet. Add boxes to track recon → root → proof.</div>'; return; }
   arr.forEach(t => {
     const active = t.id === actId;
     const card = document.createElement('div');
+    card.dataset.id = t.id;
     card.className = 'tg-card' + (t.root && t.proof ? ' done' : '') + (active ? ' active' : '');
     card.innerHTML =
       `<div class="tg-top">` + (active ? `<span class="tg-badge">active</span>` : '') +
@@ -961,9 +1181,24 @@ function renderTargets() {
       `</div>` +
       `<textarea class="tg-notes" rows="2" placeholder="creds · open ports · path to root"></textarea>`;
     card.querySelector('.tg-notes').value = t.notes || '';
-    card.querySelectorAll('input[data-stage]').forEach(inp => inp.addEventListener('change', () => { t[inp.dataset.stage] = inp.checked; saveTargets(arr); renderTargets(); }));
-    card.querySelector('input[data-flag="dc"]').addEventListener('change', e => { t.dc = e.target.checked; saveTargets(arr); if (t.id === getActive()) activateTarget(t); });
-    card.querySelector('.tg-use').addEventListener('click', () => activateTarget(t));
+    // update stage state in place so the focused checkbox is never destroyed
+    card.querySelectorAll('input[data-stage]').forEach(inp => inp.addEventListener('change', () => {
+      const done = nextTargetDone(t, inp.dataset.stage, inp.checked);
+      saveTargets(arr);
+      card.classList.toggle('done', done);
+      $('#targetSummary').textContent = computeTargetSummary(arr);
+    }));
+    card.querySelector('input[data-flag="dc"]').addEventListener('change', e => {
+      t.dc = e.target.checked; saveTargets(arr);
+      if (t.id === getActive()) activateTarget(t); else renderTargets();
+      const el = document.querySelector(`#targetList .tg-card[data-id="${t.id}"] input[data-flag="dc"]`);
+      if (el) el.focus();
+    });
+    card.querySelector('.tg-use').addEventListener('click', () => {
+      activateTarget(t);
+      const el = document.querySelector(`#targetList .tg-card[data-id="${t.id}"] .tg-use`);
+      if (el) el.focus();
+    });
     card.querySelector('.tg-notes').addEventListener('input', e => { t.notes = e.target.value; saveTargets(arr); });
     card.querySelector('.tg-del').addEventListener('click', () => {
       if (confirm('Delete ' + (t.name || 'target') + '?')) {
@@ -1066,6 +1301,22 @@ tabs.forEach(tab => {
     tabs[i].focus(); selectTab(tabs[i]);
   });
 });
+
+// --- responsive navigation: keep desktop keyboard flow, add a mobile Back ---
+function isMobileViewport() {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 820px)').matches;
+}
+function prefersReducedMotion() {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+$('#backToTpl').addEventListener('click', () => {
+  const rail = document.querySelector('.rail');
+  if (rail) rail.scrollIntoView({ behavior: scrollBehavior(prefersReducedMotion()), block: 'start' });
+  // preserve context: return focus to the chosen template (or the filter)
+  const sel = selected ? document.querySelector(`#tplList button[data-id="${selected}"]`) : null;
+  if (sel) sel.focus(); else $('#search').focus();
+});
+$('#extraArgs').addEventListener('input', markStale);
 
 renderGlobals();
 loadTemplates();
