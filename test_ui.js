@@ -14,7 +14,7 @@ const HTML_PATH = path.join(HERE, 'index.html');
 
 const CORE_EXPORTS = [
   'createRenderGuard', 'buildField', 'buildOptionChip', 'copyOutcome',
-  'classifyFetchOutcome', 'mobileSelectAction', 'scrollBehavior', 'nextTargetDone',
+  'mobileSelectAction', 'scrollBehavior', 'nextTargetDone',
 ];
 
 let checks = 0;
@@ -125,12 +125,7 @@ function main() {
   const chipInput = chip.children[0];
   check('option chip value keeps quotes intact', chipInput.value === '--flag="x"', 'got ' + JSON.stringify(chipInput.value));
 
-  // (3) fetch outcome distinguishes failure from an empty successful search.
-  check('fetch failure classifies as error', core.classifyFetchOutcome(false, 0) === 'error');
-  check('empty successful search classifies as empty', core.classifyFetchOutcome(true, 0) === 'empty');
-  check('non-empty result classifies as data', core.classifyFetchOutcome(true, 5) === 'data');
-
-  // (4) copy feedback is truthful about execCommand returning false.
+  // (3) copy feedback is truthful about execCommand returning false.
   check('clipboard success reports ok', core.copyOutcome(true, false) === 'ok');
   check('execCommand(false) is not reported as success', core.copyOutcome(false, false) === 'manual');
   check('truthy execCommand fallback reports ok', core.copyOutcome(false, true) === 'ok');

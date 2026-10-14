@@ -52,7 +52,7 @@ startup** — edit text, restart:
 | `methodology.json` | methodology checklist phases |
 | `server.py` · `index.html` | stdlib server · single-page UI |
 | `test_floki.py` | `python3 test_floki.py` — engine + DB self-check |
-| `test_ui.py` · `test_ui.js` | `python3 test_ui.py` — UI logic regression checks (Node, or headless Chrome fallback; no deps) |
+| `test_ui.py` · `test_ui.js` | `python3 test_ui.py` — UI regression checks (full-page headless Chrome, plus Node pure-logic helpers; no deps) |
 
 Add a template object to `templates.json`:
 
