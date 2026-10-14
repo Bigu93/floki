@@ -127,7 +127,11 @@ BROWSER_TESTS = r"""
   }
   function resp(obj){ return {ok:true, status:200, json:function(){ return Promise.resolve(obj); }}; }
   function tpl(id){ return document.querySelector('#tplList button[data-id="' + id + '"]'); }
-  function pick(id){ var b = tpl(id); if (b) b.click(); return b; }
+  function revealRow(b){ for (var d = b && b.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true; return b; }
+  function rowVisible(b){ return !!b && !b.closest('details:not([open])') && !b.closest('.titem[hidden]') && !b.closest('.grp[hidden]'); }
+  // Select via the real user path: expand the collapsed group/category first,
+  // then click a row that is actually visible.
+  function pick(id){ var b = tpl(id); if (!b) { ck('pick-' + id + '-present', false); return b; } revealRow(b); ck('pick-' + id + '-visible', rowVisible(b), 'row not visible'); b.click(); return b; }
   var isMobile = window.matchMedia('(max-width: 820px)').matches;
   var F = window.__floki;
 
@@ -260,6 +264,10 @@ BROWSER_TESTS = r"""
       await tick();
       var cb = $('#targetList .tg-card input[data-stage="recon"]');
       ck('target-card-created', !!cb);
+      // adding a target with an IP activates it and rewrites the builder inputs,
+      // so the previously rendered command must now be stale and non-copyable
+      ck('activate-target-disables-copy', $('#copyBtn').disabled === true);
+      ck('activate-target-marks-stale', $('#cmd').classList.contains('stale'));
       if (cb) {
         cb.focus();
         cb.checked = true;
@@ -275,6 +283,8 @@ BROWSER_TESTS = r"""
         var builderEl = document.querySelector('.builder');
         ck('mobile-focus-builder', document.activeElement === builderEl);
         ck('mobile-input-not-autofocused', document.activeElement !== $('#var-TARGET'));
+        // simulate the user having collapsed/regrouped the tree since selecting
+        for (var d = tpl('t-var').closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = false;
         ck('mobile-back-visible', $('#backToTpl').hidden === false);
         $('#backToTpl').click();
         await tick();

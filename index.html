@@ -1338,14 +1338,30 @@ function findTplButton(id) {
 function findTgCard(id) {
   return [...document.querySelectorAll('#targetList .tg-card')].find(c => c.dataset.id === id) || null;
 }
+// A template row is only focusable when its group + category are open and no
+// active filter hides it. Open the ancestors, then report real visibility.
+function tplButtonVisible(btn) {
+  if (!btn) return false;
+  return !btn.closest('details:not([open])') && !btn.closest('.titem[hidden]') && !btn.closest('.grp[hidden]');
+}
+function revealTplButton(btn) {
+  if (!btn) return false;
+  for (let d = btn.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true;
+  return tplButtonVisible(btn);
+}
 $('#backToTpl').addEventListener('click', () => {
   const rail = document.querySelector('.rail');
   if (rail) rail.scrollIntoView({ behavior: scrollBehavior(prefersReducedMotion()), block: 'start' });
-  // preserve context: return focus to the chosen template (or the filter) without
-  // letting the focus jump override the smooth scroll back to the rail.
+  // preserve context: make the chosen template actually visible (its group may
+  // have been collapsed or regrouped since selection), then return focus to it.
+  // If it's filtered out or gone, fall back to the filter box.
   const sel = selected ? findTplButton(selected) : null;
-  if (sel) { try { sel.focus({ preventScroll: true }); } catch { try { sel.focus(); } catch {} } }
-  else $('#search').focus();
+  if (sel && revealTplButton(sel)) {
+    try { sel.focus({ preventScroll: true }); } catch { try { sel.focus(); } catch {} }
+    try { sel.scrollIntoView({ behavior: scrollBehavior(prefersReducedMotion()), block: 'nearest' }); } catch {}
+  } else {
+    $('#search').focus();
+  }
 });
 $('#extraArgs').addEventListener('input', markStale);
 
