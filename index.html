@@ -307,6 +307,21 @@
   .axis-switch button[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-strong); }
   .axis-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  /* --- pivot helper (rail) --- */
+  .pivot { margin: 0 0 var(--s3); border: 1px solid var(--border); border-radius: var(--r2); background: var(--surface-2); overflow: hidden; }
+  .pivot > summary { list-style: none; cursor: pointer; padding: 7px var(--s3); font-size: .74rem; font-weight: 600; color: var(--muted); user-select: none; }
+  .pivot > summary::-webkit-details-marker { display: none; }
+  .pivot > summary:hover { color: var(--accent-strong); }
+  .pivot > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r1); }
+  .pivot-body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: 0 var(--s3) var(--s3); }
+  .pivot-body label { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; color: var(--dim); }
+  .pivot-body select, .field select {
+    background: var(--bg); border: 1px solid var(--border-2); color: var(--ink);
+    font-family: var(--mono); font-size: .78rem; padding: 5px 8px; border-radius: var(--r1);
+  }
+  .field select { font-size: .84rem; padding: 8px 11px; }
+  .pivot-body select:focus-visible, .field select:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+
   /* --- target / points tracker --- */
   .target-add { display: grid; grid-template-columns: 1fr 76px 46px auto; gap: var(--s2); padding: 0 var(--s4) var(--s3); }
   .target-add input { background: var(--bg); border: 1px solid var(--border-2); color: var(--ink); font-family: var(--mono); font-size: .78rem; padding: 6px 9px; border-radius: var(--r1); min-width: 0; }
@@ -369,6 +384,27 @@
         <button type="button" data-axis="tool" aria-pressed="false">Tool</button>
         <button type="button" data-axis="platform" aria-pressed="false">Platform</button>
       </div>
+      <details class="pivot" id="pivot">
+        <summary>Pivot helper — have / want</summary>
+        <div class="pivot-body">
+          <label>have
+            <select id="pivHave" aria-label="Access you have">
+              <option value="ssh">SSH creds</option>
+              <option value="shell">foothold shell</option>
+            </select>
+          </label>
+          <label>want
+            <select id="pivWant" aria-label="Reach you want">
+              <option value="socks">SOCKS proxy</option>
+              <option value="local">local forward</option>
+              <option value="remote">remote forward</option>
+              <option value="redirect">port redirect</option>
+              <option value="subnet">subnet (VPN-like)</option>
+            </select>
+          </label>
+          <button type="button" id="pivGo" class="btn-ghost sm">show</button>
+        </div>
+      </details>
       <div id="tplStatus" class="status-bar" role="status" aria-live="polite" hidden></div>
       <div id="tplList" class="scroll"></div>
     </nav>
@@ -397,6 +433,10 @@
             <label for="extraArgs">Extra args <span class="muted-note">appended verbatim</span></label>
             <input type="text" id="extraArgs" placeholder="--exec-method wmiexec   -d DOMAIN   --timeout 10">
           </div>
+          <div class="field extra-field">
+            <label for="encSel">Encoding <span class="muted-note">override the template default</span></label>
+            <select id="encSel" aria-label="Output encoding override"></select>
+          </div>
           <div class="actions">
             <button type="submit" class="btn-primary">Render</button>
             <button type="button" id="copyBtn" class="btn-ghost" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
@@ -406,7 +446,7 @@
         <p class="msg" id="msg" role="status" aria-live="polite"></p>
         <div class="output-wrap" id="outputWrap" hidden>
           <div class="output-label">Output</div>
-          <div id="cmd" class="output empty" aria-live="polite">Rendered command will appear here.</div>
+          <div id="cmd" class="output empty" tabindex="0" aria-live="polite" title="Press Enter to copy">Rendered command will appear here.</div>
           <p class="notes" id="notes"></p>
         </div>
         <div id="manualCopy" class="manual-copy" hidden>
@@ -523,6 +563,21 @@ function scrollBehavior(reducedMotion) {
 function nextTargetDone(target, stage, checked) {
   target[stage] = checked;
   return !!(target.root && target.proof);
+}
+// Methodology checklist is scoped to the active target so each box tracks its
+// own progress; with no active target it falls back to one shared global key.
+function methodologyKey(activeId) {
+  return activeId ? 'floki_done:' + activeId : 'floki_done';
+}
+// Pivot helper: map a have-access / want-reach pair to a template filter query
+// that surfaces the matching Pivoting & Tunneling entries.
+function pivotQuery(have, want) {
+  if (want === 'redirect') return 'socat redirect';   // host redirector; no SSH needed
+  if (have !== 'ssh') return 'chisel';                 // only a foothold shell: chisel is the sole no-SSH option
+  if (want === 'local') return 'ssh local forward';
+  if (want === 'remote') return 'ssh remote forward';
+  if (want === 'subnet') return 'sshuttle';
+  return 'ssh dynamic';                                // socks proxy (default)
 }
 /* FLOKI-CORE-END */
 
@@ -855,6 +910,7 @@ function selectTpl(id, btn) {
   box.querySelectorAll('input[data-var]').forEach(i => i.addEventListener('input', markStale));
   optBox.querySelectorAll('input[data-opt]').forEach(i => i.addEventListener('change', markStale));
   $('#extraArgs').value = '';
+  const encSel = $('#encSel'); if (encSel) encSel.value = '';  // back to template default
   setMsg('');
   const firstInput = box.querySelector('input');
   if (mobileSelectAction(isMobileViewport()) === 'scroll') {
@@ -880,6 +936,8 @@ $('#genForm').addEventListener('submit', async e => {
   document.querySelectorAll('#varFields input[data-var]').forEach(i => { vars[i.dataset.var] = i.value; });
   const options = [...document.querySelectorAll('#optFields input[data-opt]:checked')].map(i => i.value);
   const extra = $('#extraArgs').value;
+  const encSel = $('#encSel');
+  const encoding = encSel ? encSel.value : '';  // '' = use the template's own encoding
   // claim a token; if inputs/template change while this render is in flight the
   // response is discarded instead of overwriting the (now different) output.
   const token = renderGuard.bump();
@@ -891,7 +949,9 @@ $('#genForm').addEventListener('submit', async e => {
   try {
     data = await fetchJSON('/api/render', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template_id: selected, vars, options, extra }),
+      body: JSON.stringify(encoding
+        ? { template_id: selected, vars, options, extra, encoding }
+        : { template_id: selected, vars, options, extra }),
     });
   } catch (err) {
     // only the newest render owns the busy/status flags: a superseded request
@@ -1002,14 +1062,19 @@ async function copyText(text, opts) {
 }
 
 // --- methodology checklist (check state + notes persist per-browser) ---
-const DONE_KEY = 'floki_done', HAVE_KEY = 'floki_have';
-function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || '{}'); } catch { return {}; } }
-function saveDone(d) { try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch {} }
+const HAVE_KEY = 'floki_have';
+// Per-active-target scope (see methodologyKey in FLOKI-CORE); resolved at call
+// time so switching the active box swaps the checklist's storage.
+function doneKey() { return methodologyKey(getActive()); }
+function loadDone() { try { return JSON.parse(localStorage.getItem(doneKey()) || '{}'); } catch { return {}; } }
+function saveDone(d) { try { localStorage.setItem(doneKey(), JSON.stringify(d)); } catch {} }
 
 async function loadMethodology() {
   let data;
   const statusEl = $('#methodStatus'), box = $('#methodList');
-  if (box) box.setAttribute('aria-busy', 'true');
+  // Clear synchronously so a stale checklist can't be clicked while the fetch is
+  // in flight — its handlers resolve the storage key from the now-active target.
+  if (box) { box.innerHTML = ''; box.setAttribute('aria-busy', 'true'); }
   try { data = await fetchJSON('/api/methodology'); }
   catch (err) {
     if (box) { box.removeAttribute('aria-busy'); box.innerHTML = ''; }
@@ -1045,9 +1110,12 @@ async function loadMethodology() {
 function updateProgress() {
   const items = [...document.querySelectorAll('#methodList input[type=checkbox]')];
   const n = items.filter(i => i.checked).length;
-  $('#methodProgress').textContent = `${n}/${items.length} done`;
+  const act = getActive();
+  const t = act && loadTargets().find(x => x.id === act);
+  const scope = t ? (t.name || t.ip || 'target') : 'global';
+  $('#methodProgress').textContent = `${scope} · ${n}/${items.length} done`;
 }
-$('#resetMethod').addEventListener('click', () => { try { localStorage.removeItem(DONE_KEY); } catch {} loadMethodology(); });
+$('#resetMethod').addEventListener('click', () => { try { localStorage.removeItem(doneKey()); } catch {} loadMethodology(); });
 
 const have = $('#haveNotes');
 try { have.value = localStorage.getItem(HAVE_KEY) || ''; } catch {}
@@ -1168,6 +1236,7 @@ function activateTarget(t) {
   // pushing a box's IP changes builder inputs → any shown output is now stale
   markStale();
   renderTargets();
+  loadMethodology();  // checklist is per-target: swap to this box's progress
   toast('Active target: ' + (t.name || t.ip));
 }
 function computeTargetSummary(arr) {
@@ -1223,8 +1292,10 @@ function renderTargets() {
     card.querySelector('.tg-notes').addEventListener('input', e => { t.notes = e.target.value; saveTargets(arr); });
     card.querySelector('.tg-del').addEventListener('click', () => {
       if (confirm('Delete ' + (t.name || 'target') + '?')) {
-        if (t.id === getActive()) { try { localStorage.removeItem(ACTIVE_KEY); } catch {} renderStrip(); }
+        const wasActive = t.id === getActive();
+        if (wasActive) { try { localStorage.removeItem(ACTIVE_KEY); } catch {} renderStrip(); }
         saveTargets(arr.filter(x => x.id !== t.id)); renderTargets();
+        if (wasActive) loadMethodology();  // fell back to global scope
       }
     });
     list.appendChild(card);
@@ -1364,6 +1435,38 @@ $('#backToTpl').addEventListener('click', () => {
   }
 });
 $('#extraArgs').addEventListener('input', markStale);
+
+// --- encoding override dropdown (keys match server ENCODERS) ---
+const ENC_OPTS = [
+  ['', 'template default'],
+  ['raw', 'raw'],
+  ['url', 'url'],
+  ['base64', 'base64 — PowerShell UTF-16LE'],
+  ['b64', 'b64 — plain UTF-8'],
+  ['url2', 'url ×2 (double-encode)'],
+  ['hex', '\\xHH per byte'],
+  ['unicode', '\\uXXXX per char'],
+];
+(function initEncSel() {
+  const s = $('#encSel'); if (!s) return;
+  ENC_OPTS.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; s.appendChild(o); });
+  s.addEventListener('change', markStale);  // a different encoding makes shown output stale
+})();
+
+// --- pivot helper: filter the list to the matching tunneling templates ---
+const pivGo = $('#pivGo');
+if (pivGo) pivGo.addEventListener('click', () => {
+  const q = pivotQuery($('#pivHave').value, $('#pivWant').value);
+  const s = $('#search'); s.value = q; filterTemplates(q);
+  kbdIndex = -1;
+  s.scrollIntoView({ block: 'nearest' });
+});
+
+// Enter on the focused output copies it (keyboard parity with the Copy button).
+$('#cmd').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || $('#copyBtn').disabled) return;
+  e.preventDefault(); copyText($('#copyBtn').dataset.cmd, { flash: true });
+});
 
 renderGlobals();
 loadTemplates();

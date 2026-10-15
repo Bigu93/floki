@@ -15,6 +15,7 @@ const HTML_PATH = path.join(HERE, 'index.html');
 const CORE_EXPORTS = [
   'createRenderGuard', 'buildField', 'buildOptionChip', 'copyOutcome',
   'mobileSelectAction', 'scrollBehavior', 'nextTargetDone',
+  'methodologyKey', 'pivotQuery',
 ];
 
 let checks = 0;
@@ -143,6 +144,26 @@ function main() {
   check('desktop selection focuses the first input', core.mobileSelectAction(false) === 'focus');
   check('reduced motion uses instant scrolling', core.scrollBehavior(true) === 'auto');
   check('normal motion allows smooth scrolling', core.scrollBehavior(false) === 'smooth');
+
+  // (7) methodology checklist is scoped per active target, global when none.
+  check('methodology key is global with no active target', core.methodologyKey('') === 'floki_done');
+  check('methodology key is namespaced per target', core.methodologyKey('box-1') === 'floki_done:box-1');
+  check('two targets get distinct methodology keys',
+    core.methodologyKey('a') !== core.methodologyKey('b'));
+
+  // (8) pivot helper maps have/want to a filter that hits real tunneling entries.
+  check('socks + ssh -> ssh dynamic', core.pivotQuery('ssh', 'socks') === 'ssh dynamic');
+  check('local + ssh -> ssh local forward', core.pivotQuery('ssh', 'local') === 'ssh local forward');
+  check('remote + ssh -> ssh remote forward', core.pivotQuery('ssh', 'remote') === 'ssh remote forward');
+  check('subnet + ssh -> sshuttle', core.pivotQuery('ssh', 'subnet') === 'sshuttle');
+  // only a foothold shell (no SSH): chisel is the sole workable option…
+  check('socks + shell -> chisel', core.pivotQuery('shell', 'socks') === 'chisel');
+  check('local + shell -> chisel', core.pivotQuery('shell', 'local') === 'chisel');
+  check('remote + shell -> chisel', core.pivotQuery('shell', 'remote') === 'chisel');
+  check('subnet + shell -> chisel', core.pivotQuery('shell', 'subnet') === 'chisel');
+  // …except a host redirector, which needs no SSH either way.
+  check('redirect + shell -> socat redirect', core.pivotQuery('shell', 'redirect') === 'socat redirect');
+  check('redirect + ssh -> socat redirect', core.pivotQuery('ssh', 'redirect') === 'socat redirect');
 
   console.log('');
   console.log(checks + ' checks, ' + failures + ' failure(s)');
