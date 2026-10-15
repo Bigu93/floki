@@ -113,8 +113,20 @@ def _hex(cmd):
 
 
 def _unicode(cmd):
-    # Every character as a literal \uXXXX escape.
-    return "".join(f"\\u{ord(ch):04x}" for ch in cmd)
+    # Every character as a literal \uXXXX escape. Non-BMP characters (ordinal
+    # above U+FFFF) have no single 4-digit escape, so emit them as a UTF-16
+    # surrogate pair (\uXXXX\uXXXX), which decodes back to the same string.
+    parts = []
+    for ch in cmd:
+        cp = ord(ch)
+        if cp <= 0xFFFF:
+            parts.append(f"\\u{cp:04x}")
+        else:
+            cp -= 0x10000
+            high = 0xD800 + (cp >> 10)
+            low = 0xDC00 + (cp & 0x3FF)
+            parts.append(f"\\u{high:04x}\\u{low:04x}")
+    return "".join(parts)
 
 
 ENCODERS = {
@@ -190,10 +202,9 @@ def render(template, values, options=None, extra="", encoding=None):
     cmd = " ".join(parts)
 
     chosen = encoding if encoding is not None else template.get("encoding", "raw")
-    encoder = ENCODERS.get(chosen)
-    if encoder is None:
+    if not isinstance(chosen, str) or chosen not in ENCODERS:
         raise ValueError(f"Unknown encoding '{chosen}'.")
-    return encoder(cmd)
+    return ENCODERS[chosen](cmd)
 
 
 # --- sqlite store -----------------------------------------------------------

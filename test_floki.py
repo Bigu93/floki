@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Minimal self-check for the render/validation/encoding logic. Run: python3 test_floki.py"""
 import base64
+import json
 import os
 import sqlite3
 import tempfile
+import threading
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import server
@@ -124,6 +128,53 @@ def test_unicode_encoder_escapes_each_char():
     tpl = {"template": "AB", "encoding": "raw"}
     out = server.render(tpl, {}, encoding="unicode")
     assert out == "\\u0041\\u0042", out
+
+
+def test_unicode_encoder_non_bmp_uses_surrogate_pair():
+    # U+1F600 (grinning face) has no single 4-hex-digit \u escape; it must be
+    # emitted as the UTF-16 surrogate pair \ud83d\ude00.
+    tpl = {"template": "\U0001f600", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="unicode")
+    assert out == "\\ud83d\\ude00", out
+
+
+def _api_render(payload):
+    server.build_db()
+    httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    port = httpd.server_address[1]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/render",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_api_invalid_override_types_return_400():
+    tpl = server.load_templates()[0]
+    values = {}
+    for var in server.template_vars(tpl["template"]):
+        if var in server.HOST_VARS:
+            values[var] = "10.0.0.1"
+        elif var in server.PORT_VARS:
+            values[var] = "4444"
+        else:
+            values[var] = "x"
+    for bad in ([], {}):
+        code, body = _api_render({"template_id": tpl["id"], "vars": values,
+                                  "encoding": bad})
+        assert code == 400, (bad, code, body)
+        assert "error" in body, body
 
 
 def test_encoding_override_wins():
