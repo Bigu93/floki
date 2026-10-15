@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Minimal self-check for the render/validation/encoding logic. Run: python3 test_floki.py"""
 import base64
+import json
+import os
+import sqlite3
+import tempfile
+import threading
+import urllib.error
+import urllib.request
+from pathlib import Path
+
 import server
 
 
@@ -94,6 +103,125 @@ def test_options_whitelist_and_extra():
                         ["--shares", "--sam", "--evil"], "--local-auth")
     # only whitelisted flags appended (in submitted order), unknown --evil dropped, extra last
     assert out == "nxc smb 10.0.0.5 -u a -p b --shares --sam --local-auth", out
+
+
+def test_b64_encoder_is_plain_utf8():
+    # 'b64' is plain UTF-8 base64, distinct from the UTF-16LE 'base64' encoder.
+    tpl = {"template": "AB", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="b64")
+    assert out == base64.b64encode(b"AB").decode("ascii") == "QUI=", out
+
+
+def test_url2_encoder_double_encodes():
+    tpl = {"template": "a b", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="url2")
+    assert out == "a%2520b", out
+
+
+def test_hex_encoder_escapes_each_utf8_byte():
+    tpl = {"template": "AB", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="hex")
+    assert out == "\\x41\\x42", out
+
+
+def test_unicode_encoder_escapes_each_char():
+    tpl = {"template": "AB", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="unicode")
+    assert out == "\\u0041\\u0042", out
+
+
+def test_unicode_encoder_non_bmp_uses_surrogate_pair():
+    # U+1F600 (grinning face) has no single 4-hex-digit \u escape; it must be
+    # emitted as the UTF-16 surrogate pair \ud83d\ude00.
+    tpl = {"template": "\U0001f600", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="unicode")
+    assert out == "\\ud83d\\ude00", out
+
+
+def _api_render(payload):
+    server.build_db()
+    httpd = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    port = httpd.server_address[1]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/render",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_api_invalid_override_types_return_400():
+    tpl = server.load_templates()[0]
+    values = {}
+    for var in server.template_vars(tpl["template"]):
+        if var in server.HOST_VARS:
+            values[var] = "10.0.0.1"
+        elif var in server.PORT_VARS:
+            values[var] = "4444"
+        else:
+            values[var] = "x"
+    for bad in ([], {}):
+        code, body = _api_render({"template_id": tpl["id"], "vars": values,
+                                  "encoding": bad})
+        assert code == 400, (bad, code, body)
+        assert "error" in body, body
+
+
+def test_encoding_override_wins():
+    tpl = {"template": "AB", "encoding": "base64"}
+    assert server.render(tpl, {}) != "QUI="  # template default = UTF-16LE b64
+    assert server.render(tpl, {}, encoding="b64") == "QUI="  # override wins
+    tpl2 = {"template": "a b", "encoding": "url"}
+    assert server.render(tpl2, {}) == "a%20b"
+    assert server.render(tpl2, {}, encoding="raw") == "a b"
+
+
+def test_unknown_encoding_override_rejected():
+    tpl = {"template": "AB", "encoding": "raw"}
+    for bad in ("nope", "b64x"):
+        try:
+            server.render(tpl, {}, encoding=bad)
+            assert False, f"expected ValueError for encoding={bad!r}"
+        except ValueError:
+            pass
+
+
+def test_reference_search_rank():
+    # Exact > prefix > substring, stable within a tier. Use a throwaway DB so the
+    # assertion does not depend on the contents of reference_seed.json.
+    old_db, old_tables = server.DB_FILE, server.REF_TABLES
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        con = sqlite3.connect(path)
+        con.execute('CREATE TABLE t ("name", "notes")')
+        con.executemany("INSERT INTO t VALUES (?, ?)", [
+            ("bobcat",  "x"),   # substring
+            ("cat",     "x"),   # exact
+            ("catalog", "x"),   # prefix
+            ("dog",     "x"),   # no match -> excluded
+            ("scatter", "x"),   # substring
+        ])
+        con.commit()
+        con.close()
+        server.DB_FILE = Path(path)
+        server.REF_TABLES = {"t": (("name", "notes"), "name")}
+        rows = server.search_reference("cat")["t"]
+        assert [r["name"] for r in rows] == ["cat", "catalog", "bobcat", "scatter"], rows
+        assert server.search_reference("nomatch")["t"] == []
+    finally:
+        server.DB_FILE, server.REF_TABLES = old_db, old_tables
+        os.remove(path)
 
 
 def test_reference_db_build_and_search():

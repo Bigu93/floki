@@ -97,10 +97,46 @@ def _b64_powershell(cmd):
     return base64.b64encode(cmd.encode("utf-16-le")).decode("ascii")
 
 
+def _b64_utf8(cmd):
+    # Plain UTF-8 base64 (distinct from the PowerShell UTF-16LE 'base64' above).
+    return base64.b64encode(cmd.encode("utf-8")).decode("ascii")
+
+
+def _url_twice(cmd):
+    # Percent-encode twice: safe='' both times so reserved chars are also escaped.
+    return urllib.parse.quote(urllib.parse.quote(cmd, safe=""), safe="")
+
+
+def _hex(cmd):
+    # Every UTF-8 byte as a literal \xHH escape.
+    return "".join(f"\\x{b:02x}" for b in cmd.encode("utf-8"))
+
+
+def _unicode(cmd):
+    # Every character as a literal \uXXXX escape. Non-BMP characters (ordinal
+    # above U+FFFF) have no single 4-digit escape, so emit them as a UTF-16
+    # surrogate pair (\uXXXX\uXXXX), which decodes back to the same string.
+    parts = []
+    for ch in cmd:
+        cp = ord(ch)
+        if cp <= 0xFFFF:
+            parts.append(f"\\u{cp:04x}")
+        else:
+            cp -= 0x10000
+            high = 0xD800 + (cp >> 10)
+            low = 0xDC00 + (cp & 0x3FF)
+            parts.append(f"\\u{high:04x}\\u{low:04x}")
+    return "".join(parts)
+
+
 ENCODERS = {
     "raw": lambda c: c,
     "url": lambda c: urllib.parse.quote(c, safe=""),
     "base64": _b64_powershell,
+    "b64": _b64_utf8,
+    "url2": _url_twice,
+    "hex": _hex,
+    "unicode": _unicode,
 }
 
 
@@ -126,14 +162,17 @@ def template_vars(body):
     return list(dict.fromkeys(VAR_RE.findall(body)))
 
 
-def render(template, values, options=None, extra=""):
+def render(template, values, options=None, extra="", encoding=None):
     """Substitute every {VAR}, append any toggled flags + extra args, then encode.
 
     values: dict of VAR name -> string. Each var present in the template is
     required (except those in DEFAULTS). HOST_VARS are validated as IP/hostname
     and PORT_VARS as 1-65535. options: flag strings the user toggled on (only
     those declared in the template's own `options` are honored). extra: free
-    trailing arguments appended verbatim. Raises ValueError on bad/missing input.
+    trailing arguments appended verbatim. encoding: optional per-request override;
+    when given it must be a known ENCODERS key and takes precedence over the
+    template's own encoding (None means use the template's). Raises ValueError on
+    bad/missing input or an unknown encoding.
     """
     body = template["template"]
     resolved = {}
@@ -162,11 +201,10 @@ def render(template, values, options=None, extra=""):
         parts.append(extra.strip())
     cmd = " ".join(parts)
 
-    encoding = template.get("encoding", "raw")
-    encoder = ENCODERS.get(encoding)
-    if encoder is None:
-        raise ValueError(f"Unknown encoding '{encoding}' in template.")
-    return encoder(cmd)
+    chosen = encoding if encoding is not None else template.get("encoding", "raw")
+    if not isinstance(chosen, str) or chosen not in ENCODERS:
+        raise ValueError(f"Unknown encoding '{chosen}'.")
+    return ENCODERS[chosen](cmd)
 
 
 # --- sqlite store -----------------------------------------------------------
@@ -208,6 +246,27 @@ def build_db():
     con.close()
 
 
+def _match_tier(row, search_cols, ql):
+    """Rank one row against a lowercased query.
+
+    Returns 0 for an exact cell match, 1 for a prefix match, 2 for a substring
+    match, or None when no searchable cell matches. The best (lowest) tier wins.
+    """
+    best = None
+    for col in search_cols:
+        value = row[col]
+        if value is None:
+            continue
+        text = str(value).lower()
+        if text == ql:
+            return 0
+        if text.startswith(ql):
+            best = 1 if best is None else min(best, 1)
+        elif ql in text:
+            best = 2 if best is None else min(best, 2)
+    return best
+
+
 def search_reference(query):
     result = {t: [] for t in REF_TABLES}
     if not DB_FILE.exists():
@@ -215,15 +274,23 @@ def search_reference(query):
     con = sqlite3.connect(DB_FILE)
     con.row_factory = sqlite3.Row
     q = (query or "").strip()
+    ql = q.lower()
     for table, (cols, order) in REF_TABLES.items():
         search = [c for c in cols if c not in NO_SEARCH.get(table, ())]
+        # Fetch in the table's natural order first; that order is preserved inside
+        # each rank tier, so ranking only ever promotes closer matches.
+        cur = con.execute(f'SELECT * FROM {table} ORDER BY "{order}"')
+        rows = cur.fetchall()
         if q:
-            where = " OR ".join(f'CAST("{c}" AS TEXT) LIKE ?' for c in search)
-            sql = f'SELECT * FROM {table} WHERE {where} ORDER BY "{order}"'
-            cur = con.execute(sql, tuple(f"%{q}%" for _ in search))
+            ranked = []
+            for idx, row in enumerate(rows):
+                tier = _match_tier(row, search, ql)
+                if tier is not None:
+                    ranked.append((tier, idx, dict(row)))
+            ranked.sort(key=lambda item: (item[0], item[1]))
+            result[table] = [r for _, _, r in ranked]
         else:
-            cur = con.execute(f'SELECT * FROM {table} ORDER BY "{order}"')
-        result[table] = [dict(row) for row in cur.fetchall()]
+            result[table] = [dict(row) for row in rows]
     con.close()
     return result
 
@@ -289,15 +356,18 @@ class Handler(BaseHTTPRequestHandler):
         if tpl is None:
             self._json(404, {"error": "unknown template_id"})
             return
+        override = req.get("encoding")
         try:
             command = render(tpl, req.get("vars") or {},
-                             req.get("options") or [], req.get("extra") or "")
+                             req.get("options") or [], req.get("extra") or "",
+                             encoding=override)
         except ValueError as exc:
             self._json(400, {"error": str(exc)})
             return
 
+        used = override if override is not None else tpl.get("encoding", "raw")
         self._json(200, {"command": command, "notes": tpl.get("notes", ""),
-                         "type": tpl["type"], "encoding": tpl.get("encoding", "raw")})
+                         "type": tpl["type"], "encoding": used})
 
     def log_message(self, *args):
         pass  # quiet; local tool
