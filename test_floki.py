@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Minimal self-check for the render/validation/encoding logic. Run: python3 test_floki.py"""
 import base64
+import os
+import sqlite3
+import tempfile
+from pathlib import Path
+
 import server
 
 
@@ -94,6 +99,78 @@ def test_options_whitelist_and_extra():
                         ["--shares", "--sam", "--evil"], "--local-auth")
     # only whitelisted flags appended (in submitted order), unknown --evil dropped, extra last
     assert out == "nxc smb 10.0.0.5 -u a -p b --shares --sam --local-auth", out
+
+
+def test_b64_encoder_is_plain_utf8():
+    # 'b64' is plain UTF-8 base64, distinct from the UTF-16LE 'base64' encoder.
+    tpl = {"template": "AB", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="b64")
+    assert out == base64.b64encode(b"AB").decode("ascii") == "QUI=", out
+
+
+def test_url2_encoder_double_encodes():
+    tpl = {"template": "a b", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="url2")
+    assert out == "a%2520b", out
+
+
+def test_hex_encoder_escapes_each_utf8_byte():
+    tpl = {"template": "AB", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="hex")
+    assert out == "\\x41\\x42", out
+
+
+def test_unicode_encoder_escapes_each_char():
+    tpl = {"template": "AB", "encoding": "raw"}
+    out = server.render(tpl, {}, encoding="unicode")
+    assert out == "\\u0041\\u0042", out
+
+
+def test_encoding_override_wins():
+    tpl = {"template": "AB", "encoding": "base64"}
+    assert server.render(tpl, {}) != "QUI="  # template default = UTF-16LE b64
+    assert server.render(tpl, {}, encoding="b64") == "QUI="  # override wins
+    tpl2 = {"template": "a b", "encoding": "url"}
+    assert server.render(tpl2, {}) == "a%20b"
+    assert server.render(tpl2, {}, encoding="raw") == "a b"
+
+
+def test_unknown_encoding_override_rejected():
+    tpl = {"template": "AB", "encoding": "raw"}
+    for bad in ("nope", "b64x"):
+        try:
+            server.render(tpl, {}, encoding=bad)
+            assert False, f"expected ValueError for encoding={bad!r}"
+        except ValueError:
+            pass
+
+
+def test_reference_search_rank():
+    # Exact > prefix > substring, stable within a tier. Use a throwaway DB so the
+    # assertion does not depend on the contents of reference_seed.json.
+    old_db, old_tables = server.DB_FILE, server.REF_TABLES
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    try:
+        con = sqlite3.connect(path)
+        con.execute('CREATE TABLE t ("name", "notes")')
+        con.executemany("INSERT INTO t VALUES (?, ?)", [
+            ("bobcat",  "x"),   # substring
+            ("cat",     "x"),   # exact
+            ("catalog", "x"),   # prefix
+            ("dog",     "x"),   # no match -> excluded
+            ("scatter", "x"),   # substring
+        ])
+        con.commit()
+        con.close()
+        server.DB_FILE = Path(path)
+        server.REF_TABLES = {"t": (("name", "notes"), "name")}
+        rows = server.search_reference("cat")["t"]
+        assert [r["name"] for r in rows] == ["cat", "catalog", "bobcat", "scatter"], rows
+        assert server.search_reference("nomatch")["t"] == []
+    finally:
+        server.DB_FILE, server.REF_TABLES = old_db, old_tables
+        os.remove(path)
 
 
 def test_reference_db_build_and_search():
