@@ -16,6 +16,7 @@
     --surface-3: #212734;
     --border: #262c37;
     --border-2: #323a48;
+    --border-3: #3d4759;   /* scrollbar-thumb hover (one step above border-2) */
     --ink: #e8ebf1;
     --muted: #a7b0c0;
     --dim: #7e8899;
@@ -50,7 +51,7 @@
   input[type=checkbox] { accent-color: var(--accent); }
   ::-webkit-scrollbar { width: 11px; height: 11px; }
   ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
-  ::-webkit-scrollbar-thumb:hover { background: #3d4759; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-3); background-clip: padding-box; }
 
   /* --- app shell --- */
   .app { display: flex; flex-direction: column; min-height: 100%; animation: appin .25s ease both; }
@@ -158,6 +159,28 @@
   .sel-name.placeholder::before { content: ""; width: 18px; height: 18px; flex: none; background: var(--dim); -webkit-mask: var(--i-arrow) center/contain no-repeat; mask: var(--i-arrow) center/contain no-repeat; }
   .notes { color: var(--muted); font-size: .82rem; line-height: 1.55; margin: var(--s2) 0 0; max-width: 72ch; }
 
+  /* --- builder empty state: give the center real presence at rest --- */
+  .empty-state { margin-top: var(--s4); animation: appin .25s ease both; }
+  .empty-state[hidden] { display: none; }
+  .es-title { margin: 0; font-size: 1.05rem; font-weight: 620; letter-spacing: -.01em; color: var(--ink); }
+  .es-lead { color: var(--muted); font-size: .85rem; line-height: 1.55; margin: var(--s2) 0 0; max-width: 60ch; }
+  .es-keys { display: flex; flex-wrap: wrap; gap: var(--s4); margin-top: var(--s4); color: var(--dim); font-size: .78rem; }
+  .es-keys span { display: inline-flex; align-items: center; gap: 5px; }
+  kbd { font-family: var(--mono); font-size: .72rem; color: var(--muted); background: var(--surface-3);
+    border: 1px solid var(--border-2); border-bottom-width: 2px; border-radius: var(--r1); padding: 1px 6px; line-height: 1.5; }
+  .es-quick-label { margin-top: var(--s5); }
+  .es-quick-label[hidden] { display: none; }
+  .quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px,1fr)); gap: var(--s3); margin-top: var(--s2); }
+  .quick-grid[hidden] { display: none; }
+  .quick-card { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: var(--r2); padding: 11px 13px; cursor: pointer;
+    font-family: var(--sans); transition: border-color .12s, background .12s, transform .12s; }
+  .quick-card:hover { border-color: var(--accent-line); background: var(--surface-3); transform: translateY(-1px); }
+  .quick-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .quick-card .qn { color: var(--ink); font-weight: 600; font-size: .82rem; overflow-wrap: anywhere; }
+  .quick-card .qg { color: var(--dim); font-size: .72rem; }
+  .quick-card .qg .qtype { font-family: var(--mono); color: var(--accent); }
+
   #genForm { margin-top: var(--s5); }
   .var-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: var(--s4); }
   .field { display: grid; gap: 6px; }
@@ -193,6 +216,7 @@
   .msg { min-height: 1.2em; font-size: .8rem; margin: var(--s3) 0 0; }
   .msg.ok { color: var(--success); } .msg.err { color: var(--danger); }
   .badges { margin-left: auto; display: flex; gap: var(--s2); }
+  .badges[hidden] { display: none; }   /* .badges sets display:flex, which beats the UA [hidden] rule — restore it */
   .badge { font-size: .7rem; font-family: var(--mono); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-2); color: var(--muted); }
   .badge.enc { color: var(--accent); border-color: var(--accent-line); }
 
@@ -206,11 +230,16 @@
 
   .output-wrap { margin-top: var(--s5); }
   .output-label { font-size: .72rem; font-weight: 600; color: var(--muted); margin-bottom: var(--s2); }
+  .output-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s2); }
+  .output-head .output-label { margin: 0; }
   .output {
     white-space: pre-wrap; word-break: break-all; background: var(--bg); border: 1px solid var(--border-2);
     border-radius: var(--r2); padding: var(--s4); min-height: 58px; font-family: var(--mono); font-size: .84rem;
     color: var(--ink); line-height: 1.6;
   }
+  /* The rendered command is the payload: make copying it a direct click on the block. */
+  #cmd:not(.empty) { cursor: pointer; }
+  #cmd:not(.empty):hover { border-color: var(--accent-line); }
   .output.empty { color: var(--dim); }
   .output.stale { color: var(--dim); border-style: dashed; }
   .manual-copy { margin-top: var(--s4); }
@@ -289,10 +318,12 @@
 
   /* --- copy feedback: button flash + toast --- */
   .btn-ghost.copied { border-color: var(--accent-line); color: var(--accent-strong); background: var(--accent-tint); }
+  /* Elevated transient: lean on the shadow for lift, not a hairline + shadow combo.
+     A border returns only to carry the error state's semantic red edge. */
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 12px); z-index: 50;
     display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px;
-    background: var(--surface-3); border: 1px solid var(--accent-line); color: var(--ink);
-    font-size: .82rem; font-weight: 550; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    background: var(--surface-3); border: 1px solid transparent; color: var(--ink);
+    font-size: .82rem; font-weight: 550; box-shadow: 0 10px 30px rgba(0,0,0,.5);
     opacity: 0; pointer-events: none; transition: opacity .16s ease, transform .16s ease; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   .toast.err { border-color: var(--danger); color: var(--danger); }
@@ -417,11 +448,23 @@
         <div class="badges" id="meta" hidden><span class="badge" id="bType"></span><span class="badge enc" id="bEnc"></span></div>
       </div>
       <div class="builder-body scroll">
-        <details class="globals" id="globals">
+        <details class="globals" id="globals" open>
           <summary><svg class="gi" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M18 7h2M4 17h2M11 17h9"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="8.5" cy="17" r="2.3"/></svg>Session globals<span class="gmeta">prefill LHOST · DOMAIN · DC_IP · USER · PASS…</span></summary>
           <div id="globalFields" class="var-grid"></div>
         </details>
-        <div id="selName" class="sel-name placeholder">Pick a template from the list to build a command.</div>
+        <section id="emptyState" class="empty-state" aria-label="Getting started">
+          <h3 class="es-title">Start a command</h3>
+          <p class="es-lead">Pick a template, fill the blanks, and render a paste-ready command — encoded for its context. Set your globals above once and they prefill every template. Nothing runs; Floki only assembles text.</p>
+          <div class="es-keys" aria-hidden="true">
+            <span><kbd>/</kbd> filter</span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+            <span><kbd>Enter</kbd> open</span>
+            <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> render</span>
+          </div>
+          <div class="es-quick-label section-label">Jump in</div>
+          <div id="quickPicks" class="quick-grid"></div>
+        </section>
+        <div id="selName" class="sel-name" hidden></div>
         <p class="notes" id="selNotes"></p>
         <form id="genForm" autocomplete="off" hidden>
           <div id="varFields" class="var-grid"></div>
@@ -439,14 +482,16 @@
           </div>
           <div class="actions">
             <button type="submit" class="btn-primary">Render</button>
-            <button type="button" id="copyBtn" class="btn-ghost" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
             <label class="autocopy" title="Copy to clipboard automatically on Render"><input type="checkbox" id="autoCopy"> auto-copy</label>
           </div>
         </form>
         <p class="msg" id="msg" role="status" aria-live="polite"></p>
         <div class="output-wrap" id="outputWrap" hidden>
-          <div class="output-label">Output</div>
-          <div id="cmd" class="output empty" tabindex="0" aria-live="polite" title="Press Enter to copy">Rendered command will appear here.</div>
+          <div class="output-head">
+            <span class="output-label">Output</span>
+            <button type="button" id="copyBtn" class="btn-ghost sm" disabled><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</button>
+          </div>
+          <div id="cmd" class="output empty" tabindex="0" role="button" aria-live="polite" title="Click or press Enter to copy">Rendered command will appear here.</div>
           <p class="notes" id="notes"></p>
         </div>
         <div id="manualCopy" class="manual-copy" hidden>
@@ -775,6 +820,45 @@ async function loadTemplates() {
   setStatus(statusEl, '', '', null);
   $('#tplCount').textContent = templates.length;
   renderTree(currentAxis);
+  buildQuickPicks();
+}
+
+// Empty-state "Jump in" grid: one high-use template per key group, so a cold
+// start offers a one-click way into the common paths instead of a blank center.
+const QUICK_PICKS = [
+  { group: 'Reverse Shells',      match: 'bash -i' },
+  { group: 'Listeners & Upgrade', match: null },
+  { group: 'Enumeration',         match: 'nmap' },
+  { group: 'Active Directory',    match: 'evil-winrm' },
+  { group: 'NetExec (nxc)',       match: 'smb' },
+  { group: 'Web Attacks',         match: 'ffuf' },
+  { group: 'Privilege Escalation',match: null },
+  { group: 'File Transfer',       match: null },
+];
+function buildQuickPicks() {
+  const box = $('#quickPicks'), label = $('#emptyState .es-quick-label');
+  if (!box) return;
+  box.innerHTML = '';
+  const seen = new Set(), picks = [];
+  QUICK_PICKS.forEach(spec => {
+    const inGroup = templates.filter(t => t.group === spec.group);
+    if (!inGroup.length) return;
+    const t = (spec.match && inGroup.find(x => (x.name || '').toLowerCase().includes(spec.match))) || inGroup[0];
+    if (t && !seen.has(t.id)) { seen.add(t.id); picks.push(t); }
+  });
+  const none = picks.length === 0;
+  box.hidden = none; if (label) label.hidden = none;
+  picks.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'quick-card';
+    b.innerHTML = `<span class="qn">${esc(t.name)}</span><span class="qg">${esc(t.group)} · <span class="qtype">${esc(t.type)}</span></span>`;
+    b.onclick = () => {
+      const railBtn = findTplButton(t.id);
+      if (railBtn) { revealTplButton(railBtn); selectTpl(t.id, railBtn); }
+      else selectTpl(t.id, b);
+    };
+    box.appendChild(b);
+  });
 }
 
 function renderTree(axis) {
@@ -884,8 +968,12 @@ function selectTpl(id, btn) {
   $('#genForm').hidden = false;
   $('#outputWrap').hidden = false;
   resetOutput();
-  $('#selName').textContent = t.name;
-  $('#selName').classList.remove('placeholder');
+  // leave the empty state behind: this is now a build, not a cold start.
+  const es = $('#emptyState'); if (es) es.hidden = true;
+  const gdetails = $('#globals'); if (gdetails) gdetails.open = false;
+  const sn = $('#selName'); sn.hidden = false;
+  sn.textContent = t.name;
+  sn.classList.remove('placeholder');
   $('#selNotes').textContent = t.notes || '';
   const box = $('#varFields'); box.innerHTML = '';
   const vars = varsOf(t);
@@ -1462,10 +1550,14 @@ if (pivGo) pivGo.addEventListener('click', () => {
   s.scrollIntoView({ block: 'nearest' });
 });
 
-// Enter on the focused output copies it (keyboard parity with the Copy button).
+// The output block is the payload: click it (or press Enter when focused) to copy.
 $('#cmd').addEventListener('keydown', e => {
   if (e.key !== 'Enter' || $('#copyBtn').disabled) return;
   e.preventDefault(); copyText($('#copyBtn').dataset.cmd, { flash: true });
+});
+$('#cmd').addEventListener('click', () => {
+  if ($('#copyBtn').disabled) return;
+  copyText($('#copyBtn').dataset.cmd, { flash: true });
 });
 
 renderGlobals();
